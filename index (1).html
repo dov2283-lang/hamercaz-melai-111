@@ -1,0 +1,1131 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>המרכז מלאי</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+<style>
+/* ── TOKENS ── */
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface2: #f0f1f5;
+  --border: #e2e4ea;
+  --fg: #1a1d2e;
+  --fg2: #4b4f68;
+  --fg3: #9398b2;
+  --accent: #3b5bdb;
+  --accent-lt: #eef1ff;
+  --ok: #2f9e44;
+  --ok-lt: #ebfbee;
+  --err: #e03131;
+  --err-lt: #fff5f5;
+  --warn: #e67700;
+  --warn-lt: #fff9db;
+  --r: 10px;
+  --rs: 7px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1117; --surface: #1a1d2e; --surface2: #252840;
+    --border: #2e3250; --fg: #e8eaf6; --fg2: #9ea6d4;
+    --fg3: #5c6494; --accent: #748ffc; --accent-lt: #1e2340;
+    --ok: #51cf66; --ok-lt: #0d2318; --err: #ff6b6b; --err-lt: #2d0f0f;
+    --warn: #fcc419; --warn-lt: #2d2000;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1117; --surface: #1a1d2e; --surface2: #252840;
+  --border: #2e3250; --fg: #e8eaf6; --fg2: #9ea6d4;
+  --fg3: #5c6494; --accent: #748ffc; --accent-lt: #1e2340;
+  --ok: #51cf66; --ok-lt: #0d2318; --err: #ff6b6b; --err-lt: #2d0f0f;
+  --warn: #fcc419; --warn-lt: #2d2000;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: 'Heebo', sans-serif; direction: rtl; }
+body {
+  background: var(--bg); color: var(--fg);
+  padding-left: max(0px, env(safe-area-inset-left,0px));
+  padding-right: max(0px, env(safe-area-inset-right,0px));
+  font-size: 14px;
+}
+
+/* ── AUTH SCREEN ── */
+#auth-screen {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 24px;
+}
+.auth-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 40px 36px; width: 100%; max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.08);
+  text-align: center;
+}
+.auth-logo { font-size: 2.4rem; font-weight: 800; color: var(--accent); margin-bottom: 4px; }
+.auth-sub { font-size: .88rem; color: var(--fg3); margin-bottom: 32px; }
+.auth-card label { display: block; text-align: right; font-size: .82rem; font-weight: 600; color: var(--fg2); margin-bottom: 5px; }
+.auth-card input {
+  width: 100%; padding: 10px 13px; border: 1px solid var(--border);
+  border-radius: var(--rs); background: var(--surface); color: var(--fg);
+  font-size: .95rem; font-family: inherit; margin-bottom: 16px;
+}
+.auth-card input:focus { outline: none; border-color: var(--accent); }
+.btn-auth {
+  width: 100%; padding: 12px; background: var(--accent); color: #fff;
+  border: none; border-radius: var(--rs); font-size: 1rem; font-weight: 700;
+  cursor: pointer; font-family: inherit; margin-top: 4px;
+}
+.btn-auth:hover { opacity: .9; }
+.auth-err { color: var(--err); font-size: .83rem; margin-top: 10px; min-height: 20px; }
+.auth-link { font-size: .82rem; color: var(--accent); cursor: pointer; margin-top: 14px; }
+
+/* ── MAIN LAYOUT ── */
+#app { display: none; height: 100%; flex-direction: column; }
+.top-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 max(16px, env(safe-area-inset-left,0px)) 0 max(16px, env(safe-area-inset-right,0px));
+  height: 52px; background: var(--surface); border-bottom: 1px solid var(--border);
+  position: sticky; top: env(safe-area-inset-top,0px); z-index: 10;
+  flex-shrink: 0;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto;
+  height: env(safe-area-inset-top,0px); background: var(--surface); z-index: 11;
+}
+.top-title { font-size: 1rem; font-weight: 800; color: var(--accent); flex: 1; }
+.top-user { font-size: .78rem; color: var(--fg3); }
+.btn-sm { padding: 5px 11px; border-radius: var(--rs); font-size: .8rem; font-weight: 600; cursor: pointer; font-family: inherit; border: 1px solid var(--border); background: var(--surface); color: var(--fg); }
+.btn-sm:hover { background: var(--surface2); }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { opacity: .9; }
+.btn-danger { background: var(--err-lt); color: var(--err); border-color: var(--err); }
+
+.tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; overflow-x: auto; }
+.tab {
+  padding: 10px 16px; font-size: .83rem; font-weight: 600; cursor: pointer;
+  border-bottom: 2px solid transparent; color: var(--fg3); white-space: nowrap;
+  transition: color .15s;
+}
+.tab:hover { color: var(--fg); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.main-content { flex: 1; overflow-y: auto; padding: 20px max(16px, env(safe-area-inset-right,0px)) 40px max(16px, env(safe-area-inset-left,0px)); }
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ── CARDS / TABLES ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; margin-bottom: 16px; }
+.card-hd { padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 700; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card-body { padding: 16px; }
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; min-width: 500px; }
+th { padding: 9px 12px; text-align: right; font-size: .77rem; font-weight: 700; color: var(--fg3); background: var(--surface2); border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: .86rem; vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
+.tbl-num { text-align: left; font-variant-numeric: tabular-nums; direction: ltr; }
+
+/* ── FBAR ── */
+.fbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.fbar input, .fbar select {
+  padding: 7px 11px; border: 1px solid var(--border); border-radius: var(--rs);
+  background: var(--surface); color: var(--fg); font-size: .85rem; font-family: inherit;
+}
+.fbar input:focus, .fbar select:focus { outline: none; border-color: var(--accent); }
+.section-title { font-size: 1rem; font-weight: 800; margin-bottom: 14px; }
+
+/* ── BADGES ── */
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: .74rem; font-weight: 600; }
+.badge-cat { background: var(--accent-lt); color: var(--accent); }
+
+/* ── TILES ── */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px,1fr)); gap: 12px; margin-bottom: 20px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; }
+.tile-label { font-size: .76rem; color: var(--fg3); font-weight: 600; margin-bottom: 4px; }
+.tile-val { font-size: 1.5rem; font-weight: 800; color: var(--fg); font-variant-numeric: tabular-nums; }
+.tile-sub { font-size: .72rem; color: var(--fg3); margin-top: 2px; }
+.tile.ok .tile-val { color: var(--ok); }
+.tile.warn .tile-val { color: var(--warn); }
+.tile.err .tile-val { color: var(--err); }
+
+/* ── MODAL ── */
+.modal-backdrop {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  z-index: 100; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-backdrop.open { display: flex; }
+.modal {
+  background: var(--surface); border-radius: 14px; padding: 24px;
+  width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+}
+.modal-title { font-size: 1rem; font-weight: 800; margin-bottom: 20px; }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: .8rem; font-weight: 600; color: var(--fg2); margin-bottom: 5px; }
+.form-group input, .form-group select, .form-group textarea {
+  width: 100%; padding: 9px 12px; border: 1px solid var(--border);
+  border-radius: var(--rs); background: var(--surface); color: var(--fg);
+  font-size: .9rem; font-family: inherit;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+.btn { padding: 8px 18px; border-radius: var(--rs); font-size: .88rem; font-weight: 600; cursor: pointer; font-family: inherit; border: 1px solid var(--border); background: var(--surface); color: var(--fg); }
+.btn:hover { background: var(--surface2); }
+.btn.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.btn-primary:hover { opacity: .9; }
+.btn.btn-danger { background: var(--err-lt); color: var(--err); border-color: var(--err); }
+.empty { text-align: center; padding: 32px; color: var(--fg3); font-size: .88rem; }
+.spinner { text-align: center; padding: 32px; color: var(--fg3); }
+
+/* ── ADMIN ── */
+.admin-section { margin-bottom: 24px; }
+.user-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.user-row:last-child { border-bottom: none; }
+.user-info { flex: 1; }
+.user-name { font-weight: 600; font-size: .9rem; }
+.user-email { font-size: .78rem; color: var(--fg3); }
+.role-badge { padding: 2px 10px; border-radius: 20px; font-size: .74rem; font-weight: 700; }
+.role-owner { background: var(--accent-lt); color: var(--accent); }
+.role-user { background: var(--surface2); color: var(--fg3); }
+</style>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">המרכז מלאי</div>
+    <div class="auth-sub">מערכת ניהול מלאי</div>
+    <div id="auth-form">
+      <label>אימייל</label>
+      <input type="email" id="auth-email" placeholder="your@email.com" autocomplete="email">
+      <label>סיסמה</label>
+      <input type="password" id="auth-pass" placeholder="••••••••" autocomplete="current-password">
+      <button class="btn-auth" onclick="signIn()">כניסה</button>
+      <div class="auth-err" id="auth-err"></div>
+      <div class="auth-link" onclick="showReset()">שכחתי סיסמה</div>
+    </div>
+    <div id="reset-form" style="display:none">
+      <label>אימייל לאיפוס סיסמה</label>
+      <input type="email" id="reset-email" placeholder="your@email.com">
+      <button class="btn-auth" onclick="sendReset()">שלח קישור איפוס</button>
+      <div class="auth-err" id="reset-msg"></div>
+      <div class="auth-link" onclick="showLogin()">חזרה לכניסה</div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="top-bar">
+    <div class="top-title">המרכז מלאי</div>
+    <span class="top-user" id="top-user-name"></span>
+    <button class="btn-sm" onclick="signOut()">יציאה</button>
+  </div>
+  <div class="tabs" id="tabs-bar">
+    <div class="tab active" onclick="showTab('dashboard')">לוח בקרה</div>
+    <div class="tab" onclick="showTab('products')">מוצרים</div>
+    <div class="tab" onclick="showTab('supply')">אספקות</div>
+    <div class="tab" onclick="showTab('counts')">ספירות</div>
+    <div class="tab" onclick="showTab('reports')">דוחות</div>
+    <div class="tab" onclick="showTab('categories')">קטגוריות</div>
+    <div class="tab" onclick="showTab('suppliers')">ספקים</div>
+    <div class="tab" id="tab-admin-btn" onclick="showTab('admin')" style="display:none">ניהול משתמשים</div>
+  </div>
+  <div class="main-content">
+
+    <!-- DASHBOARD -->
+    <div id="tab-dashboard" class="panel active">
+      <div class="section-title">לוח בקרה</div>
+      <div class="tiles" id="dash-tiles"></div>
+      <div id="dash-alerts"></div>
+    </div>
+
+    <!-- PRODUCTS -->
+    <div id="tab-products" class="panel">
+      <div class="fbar">
+        <div class="section-title" style="margin:0">מוצרים</div>
+        <div class="hdr-spacer" style="flex:1"></div>
+        <input id="prod-search" placeholder="חיפוש..." oninput="renderProducts()">
+        <select id="prod-cat-filter" onchange="renderProducts()"><option value="">כל הקטגוריות</option></select>
+        <button class="btn-sm btn-primary" onclick="openProductModal()">+ מוצר חדש</button>
+      </div>
+      <div class="card"><div class="tbl-wrap">
+        <table>
+          <thead id="prod-thead"></thead>
+          <tbody id="prod-tbody"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- SUPPLY -->
+    <div id="tab-supply" class="panel">
+      <div class="fbar">
+        <div class="section-title" style="margin:0">אספקות</div>
+        <div style="flex:1"></div>
+        <input id="sup-search" placeholder="חיפוש..." oninput="renderSupply()">
+        <input type="date" id="sup-from" onchange="renderSupply()">
+        <input type="date" id="sup-to" onchange="renderSupply()">
+        <button class="btn-sm btn-primary" onclick="openSupplyModal()">+ אספקה חדשה</button>
+      </div>
+      <div class="card"><div class="tbl-wrap">
+        <table>
+          <thead><tr><th>תאריך</th><th>מוצר</th><th>קטגוריה</th><th>כמות</th><th>מחיר</th><th>ספק</th><th>הערות</th><th>פעולות</th></tr></thead>
+          <tbody id="sup-tbody"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- COUNTS -->
+    <div id="tab-counts" class="panel">
+      <div class="fbar">
+        <div class="section-title" style="margin:0">ספירות מלאי</div>
+        <div style="flex:1"></div>
+        <select id="cnt-date-filter" onchange="renderCounts()"><option value="">כל התאריכים</option></select>
+        <button class="btn-sm btn-primary" onclick="openCountModal()">+ ספירה חדשה</button>
+      </div>
+      <div class="card"><div class="tbl-wrap">
+        <table>
+          <thead><tr><th>תאריך</th><th>מוצר</th><th>קטגוריה</th><th>כמות</th><th>הערות</th><th>פעולות</th></tr></thead>
+          <tbody id="cnt-tbody"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- REPORTS -->
+    <div id="tab-reports" class="panel">
+      <div class="section-title">דוחות</div>
+      <div class="fbar">
+        <label>מ-</label><input type="date" id="rp-from" onchange="renderReport()">
+        <label>עד-</label><input type="date" id="rp-to" onchange="renderReport()">
+        <select id="rp-cat" onchange="renderReport()"><option value="">כל הקטגוריות</option></select>
+      </div>
+      <div id="rp-summary" class="tiles"></div>
+      <div id="rp-table"></div>
+    </div>
+
+    <!-- CATEGORIES -->
+    <div id="tab-categories" class="panel">
+      <div class="fbar">
+        <div class="section-title" style="margin:0">קטגוריות ותת-קטגוריות</div>
+        <div style="flex:1"></div>
+        <button class="btn-sm btn-primary" onclick="openCatModal()">+ קטגוריה חדשה</button>
+      </div>
+      <div id="cat-tree"></div>
+    </div>
+
+    <!-- SUPPLIERS -->
+    <div id="tab-suppliers" class="panel">
+      <div class="fbar">
+        <div class="section-title" style="margin:0">ספקים</div>
+        <div style="flex:1"></div>
+        <button class="btn-sm btn-primary" onclick="openVendorModal()">+ ספק חדש</button>
+      </div>
+      <div class="card"><div class="tbl-wrap">
+        <table>
+          <thead><tr><th>שם</th><th>איש קשר</th><th>טלפון</th><th>סוג תשלום</th><th>פעולות</th></tr></thead>
+          <tbody id="vendor-tbody"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- ADMIN -->
+    <div id="tab-admin" class="panel">
+      <div class="fbar">
+        <div class="section-title" style="margin:0">ניהול משתמשים</div>
+        <div style="flex:1"></div>
+        <button class="btn-sm btn-primary" onclick="openInviteModal()">+ הוסף משתמש</button>
+      </div>
+      <div class="card"><div class="card-body">
+        <div id="users-list"><div class="spinner">טוען...</div></div>
+      </div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-backdrop" id="modal-product">
+  <div class="modal">
+    <div class="modal-title" id="prod-modal-title">מוצר חדש</div>
+    <input type="hidden" id="prod-id">
+    <div class="form-group"><label>שם מוצר *</label><input id="prod-name"></div>
+    <div class="form-group"><label>ברקוד</label><input id="prod-barcode"></div>
+    <div class="form-group"><label>קטגוריה</label><select id="prod-cat"></select></div>
+    <div class="form-group"><label>תת-קטגוריה</label><select id="prod-subcat"></select></div>
+    <div class="form-group"><label>ספק</label><select id="prod-vendor"></select></div>
+    <div class="form-group"><label>מחיר</label><input type="number" id="prod-price" step="0.01"></div>
+    <div class="form-group"><label>הערות</label><textarea id="prod-notes" rows="2"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-product')">ביטול</button>
+      <button class="btn btn-primary" onclick="saveProduct()">שמור</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-supply">
+  <div class="modal">
+    <div class="modal-title" id="sup-modal-title">אספקה חדשה</div>
+    <input type="hidden" id="sup-id">
+    <div class="form-group"><label>תאריך *</label><input type="date" id="sup-date"></div>
+    <div class="form-group"><label>מוצר *</label><select id="sup-product"></select></div>
+    <div class="form-group"><label>כמות *</label><input type="number" id="sup-qty" min="0"></div>
+    <div class="form-group"><label>מחיר ליחידה</label><input type="number" id="sup-price" step="0.01"></div>
+    <div class="form-group"><label>ספק</label><select id="sup-vendor"></select></div>
+    <div class="form-group"><label>הערות</label><textarea id="sup-notes" rows="2"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-supply')">ביטול</button>
+      <button class="btn btn-primary" onclick="saveSupply()">שמור</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-count">
+  <div class="modal">
+    <div class="modal-title" id="cnt-modal-title">ספירת מלאי</div>
+    <input type="hidden" id="cnt-id">
+    <div class="form-group"><label>תאריך *</label><input type="date" id="cnt-date"></div>
+    <div class="form-group"><label>מוצר *</label><select id="cnt-product"></select></div>
+    <div class="form-group"><label>כמות *</label><input type="number" id="cnt-count" min="0"></div>
+    <div class="form-group"><label>הערות</label><textarea id="cnt-notes" rows="2"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-count')">ביטול</button>
+      <button class="btn btn-primary" onclick="saveCount()">שמור</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-cat">
+  <div class="modal">
+    <div class="modal-title" id="cat-modal-title">קטגוריה חדשה</div>
+    <input type="hidden" id="cat-id">
+    <div class="form-group"><label>שם קטגוריה *</label><input id="cat-name"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-cat')">ביטול</button>
+      <button class="btn btn-primary" onclick="saveCat()">שמור</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-subcat">
+  <div class="modal">
+    <div class="modal-title" id="subcat-modal-title">תת-קטגוריה חדשה</div>
+    <input type="hidden" id="subcat-id">
+    <input type="hidden" id="subcat-cat-id">
+    <div class="form-group"><label>שם *</label><input id="subcat-name"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-subcat')">ביטול</button>
+      <button class="btn btn-primary" onclick="saveSubcat()">שמור</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-vendor">
+  <div class="modal">
+    <div class="modal-title" id="vendor-modal-title">ספק חדש</div>
+    <input type="hidden" id="vendor-id">
+    <div class="form-group"><label>שם ספק *</label><input id="vendor-name"></div>
+    <div class="form-group"><label>איש קשר</label><input id="vendor-contact"></div>
+    <div class="form-group"><label>טלפון</label><input id="vendor-phone"></div>
+    <div class="form-group"><label>אימייל</label><input id="vendor-email"></div>
+    <div class="form-group"><label>סוג תשלום</label>
+      <select id="vendor-payment">
+        <option value="upfront">רכישה מראש</option>
+        <option value="consignment">קונסיגנציה</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-vendor')">ביטול</button>
+      <button class="btn btn-primary" onclick="saveVendor()">שמור</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-invite">
+  <div class="modal">
+    <div class="modal-title">הוספת משתמש חדש</div>
+    <div class="form-group"><label>אימייל *</label><input type="email" id="invite-email"></div>
+    <div class="form-group"><label>שם מלא *</label><input id="invite-name"></div>
+    <div class="form-group"><label>סיסמה זמנית *</label><input type="password" id="invite-pass" placeholder="לפחות 6 תווים"></div>
+    <div class="auth-err" id="invite-err"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-invite')">ביטול</button>
+      <button class="btn btn-primary" onclick="createUser()">צור משתמש</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  SUPABASE CONFIG
+// ══════════════════════════════════════════
+const SUPABASE_URL = 'https://nierdtmkcdakibqyjnpm.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pZXJkdG1rY2Rha2licXlqbnBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ3MzkwNTQsImV4cCI6MjExMDMxNTA1NH0.n2gSyNAaavimFTihHbfgABwz_kXqdKFfNZj87FaC7xw';
+
+async function sb(path, opts = {}) {
+  const url = SUPABASE_URL + '/rest/v1/' + path;
+  const res = await fetch(url, {
+    headers: {
+      apikey: SUPABASE_ANON,
+      Authorization: 'Bearer ' + (currentSession?.access_token || SUPABASE_ANON),
+      'Content-Type': 'application/json',
+      Prefer: opts.prefer || (opts.method === 'POST' ? 'return=representation' : ''),
+      ...(opts.headers || {})
+    },
+    method: opts.method || 'GET',
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error_description || 'שגיאה ' + res.status);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function sbAuth(action, body) {
+  const res = await fetch(SUPABASE_URL + '/auth/v1/' + action, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_ANON, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || data.message || 'שגיאת אימות');
+  return data;
+}
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let currentSession = null, currentUser = null, currentDbUser = null;
+let categories = [], subcategories = [], suppliers = [], products = [], supply = [], counts = [];
+
+// ══════════════════════════════════════════
+//  AUTH
+// ══════════════════════════════════════════
+async function signIn() {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass = document.getElementById('auth-pass').value;
+  document.getElementById('auth-err').textContent = '';
+  if (!email || !pass) { document.getElementById('auth-err').textContent = 'נא למלא אימייל וסיסמה'; return; }
+  try {
+    const data = await sbAuth('token?grant_type=password', { email, password: pass });
+    currentSession = data;
+    await onSignIn();
+  } catch(e) { document.getElementById('auth-err').textContent = e.message; }
+}
+
+async function onSignIn() {
+  // get user record
+  const meRes = await fetch(SUPABASE_URL + '/auth/v1/user', {
+    headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + currentSession.access_token }
+  });
+  const me = await meRes.json();
+  currentUser = me;
+  // get db user row
+  const rows = await sb('users?id=eq.' + me.id + '&select=*');
+  currentDbUser = rows?.[0] || null;
+  document.getElementById('top-user-name').textContent = currentDbUser?.full_name || me.email;
+  if (currentDbUser?.role === 'owner') {
+    document.getElementById('tab-admin-btn').style.display = '';
+  }
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  await loadAll();
+  renderDashboard();
+}
+
+function signOut() {
+  currentSession = null; currentUser = null; currentDbUser = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+function showReset() {
+  document.getElementById('auth-form').style.display = 'none';
+  document.getElementById('reset-form').style.display = '';
+}
+function showLogin() {
+  document.getElementById('reset-form').style.display = 'none';
+  document.getElementById('auth-form').style.display = '';
+}
+async function sendReset() {
+  const email = document.getElementById('reset-email').value.trim();
+  try {
+    await fetch(SUPABASE_URL + '/auth/v1/recover', {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    document.getElementById('reset-msg').textContent = 'נשלח קישור לאיפוס סיסמה (אם האימייל קיים במערכת)';
+    document.getElementById('reset-msg').style.color = 'var(--ok)';
+  } catch(e) { document.getElementById('reset-msg').textContent = e.message; }
+}
+
+// ══════════════════════════════════════════
+//  LOAD DATA
+// ══════════════════════════════════════════
+async function loadAll() {
+  const uid = currentUser.id;
+  [categories, subcategories, suppliers, products, supply, counts] = await Promise.all([
+    sb('categories?owner_id=eq.' + uid + '&order=order.asc,name.asc'),
+    sb('subcategories?owner_id=eq.' + uid + '&order=order.asc,name.asc'),
+    sb('suppliers?owner_id=eq.' + uid + '&order=name.asc'),
+    sb('products?owner_id=eq.' + uid + '&order=name.asc'),
+    sb('supply?owner_id=eq.' + uid + '&order=date.desc'),
+    sb('counts?owner_id=eq.' + uid + '&order=date.desc')
+  ]);
+}
+
+// ══════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════
+const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtDate = d => { if (!d) return '—'; const [y,m,dd] = d.split('-'); return dd+'/'+m+'/'+(y||'').slice(2); };
+const fmtMoney = v => v == null ? '—' : (Number(v)<0?'-₪':'₪') + Math.abs(Number(v)).toLocaleString('he-IL',{minimumFractionDigits:0,maximumFractionDigits:2});
+const getCat = id => categories.find(c=>c.id===id);
+const getSubcat = id => subcategories.find(s=>s.id===id);
+const getVendor = id => suppliers.find(s=>s.id===id);
+const getProduct = id => products.find(p=>p.id===id);
+const today = () => new Date().toISOString().slice(0,10);
+const uid = () => currentUser?.id;
+
+function catBadge(catId) {
+  const c = getCat(catId);
+  return c ? '<span class="badge badge-cat">' + esc(c.name) + '</span>' : '';
+}
+
+function stockAt(productId, date) {
+  const relCounts = counts.filter(c => c.product_id === productId && c.date <= date)
+    .sort((a,b) => b.date.localeCompare(a.date));
+  if (!relCounts.length) return 0;
+  const lastDate = relCounts[0].date;
+  return relCounts.filter(c => c.date === lastDate).reduce((s,c) => s + (Number(c.count)||0), 0);
+}
+function supplyInRange(productId, from, to) {
+  return supply.filter(s => s.product_id === productId && s.date > from && s.date <= to)
+    .reduce((s,x) => s + (Number(x.qty)||0), 0);
+}
+function currentStock(productId) { return stockAt(productId, '9999-12-31'); }
+
+// ══════════════════════════════════════════
+//  TABS
+// ══════════════════════════════════════════
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('.tab[onclick="showTab(\'' + name + '\')"]')?.classList.add('active');
+  document.getElementById('tab-' + name)?.classList.add('active');
+  if (name === 'dashboard') renderDashboard();
+  else if (name === 'products') renderProducts();
+  else if (name === 'supply') renderSupply();
+  else if (name === 'counts') renderCounts();
+  else if (name === 'reports') renderReport();
+  else if (name === 'categories') renderCategories();
+  else if (name === 'suppliers') renderSuppliers();
+  else if (name === 'admin') renderAdmin();
+}
+
+// ══════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════
+function renderDashboard() {
+  const totalProd = products.length;
+  const totalStock = products.reduce((s,p) => s + currentStock(p.id), 0);
+  const lowStock = products.filter(p => currentStock(p.id) === 0 && supply.some(s => s.product_id === p.id));
+  document.getElementById('dash-tiles').innerHTML =
+    '<div class="tile"><div class="tile-label">מוצרים</div><div class="tile-val">' + totalProd + '</div></div>' +
+    '<div class="tile"><div class="tile-label">סה"כ מלאי</div><div class="tile-val">' + totalStock.toLocaleString('he-IL') + '</div><div class="tile-sub">יחידות</div></div>' +
+    '<div class="tile ' + (lowStock.length?'warn':'ok') + '"><div class="tile-label">אזל מהמלאי</div><div class="tile-val">' + lowStock.length + '</div></div>' +
+    '<div class="tile"><div class="tile-label">ספקים</div><div class="tile-val">' + suppliers.length + '</div></div>';
+  const alerts = lowStock.slice(0,6).map(p =>
+    '<div style="padding:10px 14px;background:var(--warn-lt);border-radius:var(--rs);margin-bottom:8px;font-size:.86rem">⚠️ <strong>' + esc(p.name) + '</strong> — אזל מהמלאי</div>'
+  ).join('');
+  document.getElementById('dash-alerts').innerHTML = alerts || '<div style="color:var(--ok);font-size:.88rem;padding:8px 0">✓ כל המוצרים במלאי</div>';
+}
+
+// ══════════════════════════════════════════
+//  PRODUCTS
+// ══════════════════════════════════════════
+function renderProducts() {
+  const q = (document.getElementById('prod-search')?.value||'').toLowerCase();
+  const catF = document.getElementById('prod-cat-filter')?.value||'';
+  const catSel = document.getElementById('prod-cat-filter');
+  const curCat = catSel.value;
+  catSel.innerHTML = '<option value="">כל הקטגוריות</option>' + categories.map(c => '<option value="' + c.id + '"' + (c.id===curCat?' selected':'') + '>' + esc(c.name) + '</option>').join('');
+  let list = products.filter(p =>
+    (!catF || p.category_id === catF) &&
+    (!q || (p.name||'').toLowerCase().includes(q) || (p.barcode||'').toLowerCase().includes(q))
+  );
+  document.getElementById('prod-thead').innerHTML = '<tr><th>שם</th><th>ברקוד</th><th>קטגוריה</th><th>מחיר</th><th>מלאי</th><th>פעולות</th></tr>';
+  document.getElementById('prod-tbody').innerHTML = list.length ? list.map(p => {
+    const stk = currentStock(p.id);
+    return '<tr>' +
+      '<td><strong>' + esc(p.name) + '</strong></td>' +
+      '<td style="font-size:.8rem;direction:ltr">' + esc(p.barcode||'—') + '</td>' +
+      '<td>' + catBadge(p.category_id) + '</td>' +
+      '<td class="tbl-num">' + fmtMoney(p.price) + '</td>' +
+      '<td class="tbl-num" style="font-weight:700;color:' + (stk===0?'var(--err)':'var(--ok)') + '">' + stk + '</td>' +
+      '<td><button class="btn-sm" onclick="editProduct(\'' + p.id + '\')">עריכה</button> <button class="btn-sm btn-danger" onclick="deleteProduct(\'' + p.id + '\')">מחק</button></td>' +
+      '</tr>';
+  }).join('') : '<tr><td colspan="6"><div class="empty">אין מוצרים</div></td></tr>';
+}
+
+function openProductModal(id) {
+  const p = id ? getProduct(id) : null;
+  document.getElementById('prod-modal-title').textContent = p ? 'עריכת מוצר' : 'מוצר חדש';
+  document.getElementById('prod-id').value = id || '';
+  document.getElementById('prod-name').value = p?.name || '';
+  document.getElementById('prod-barcode').value = p?.barcode || '';
+  document.getElementById('prod-price').value = p?.price || '';
+  document.getElementById('prod-notes').value = p?.notes || '';
+  const catSel = document.getElementById('prod-cat');
+  catSel.innerHTML = '<option value="">ללא קטגוריה</option>' + categories.map(c => '<option value="' + c.id + '"' + (c.id===p?.category_id?' selected':'') + '>' + esc(c.name) + '</option>').join('');
+  const subSel = document.getElementById('prod-subcat');
+  const subs = subcategories.filter(s => s.category_id === (p?.category_id || catSel.value));
+  subSel.innerHTML = '<option value="">ללא תת-קטגוריה</option>' + subs.map(s => '<option value="' + s.id + '"' + (s.id===p?.subcategory_id?' selected':'') + '>' + esc(s.name) + '</option>').join('');
+  catSel.onchange = () => {
+    const ss = subcategories.filter(s => s.category_id === catSel.value);
+    subSel.innerHTML = '<option value="">ללא תת-קטגוריה</option>' + ss.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
+  };
+  const vSel = document.getElementById('prod-vendor');
+  vSel.innerHTML = '<option value="">ללא ספק</option>' + suppliers.map(v => '<option value="' + v.id + '"' + (v.id===p?.supplier_id?' selected':'') + '>' + esc(v.name) + '</option>').join('');
+  document.getElementById('modal-product').classList.add('open');
+}
+function editProduct(id) { openProductModal(id); }
+
+async function saveProduct() {
+  const id = document.getElementById('prod-id').value;
+  const name = document.getElementById('prod-name').value.trim();
+  if (!name) { alert('נא להזין שם מוצר'); return; }
+  const data = {
+    name, owner_id: uid(),
+    barcode: document.getElementById('prod-barcode').value.trim() || null,
+    category_id: document.getElementById('prod-cat').value || null,
+    subcategory_id: document.getElementById('prod-subcat').value || null,
+    supplier_id: document.getElementById('prod-vendor').value || null,
+    price: parseFloat(document.getElementById('prod-price').value) || 0,
+    notes: document.getElementById('prod-notes').value.trim() || null
+  };
+  try {
+    if (id) {
+      await sb('products?id=eq.' + id, { method: 'PATCH', body: data, prefer: 'return=minimal' });
+      const idx = products.findIndex(p => p.id === id);
+      if (idx >= 0) products[idx] = { ...products[idx], ...data };
+    } else {
+      const rows = await sb('products', { method: 'POST', body: data });
+      products.push(rows[0]);
+    }
+    closeModal('modal-product');
+    renderProducts();
+    renderDashboard();
+  } catch(e) { alert('שגיאה: ' + e.message); }
+}
+
+async function deleteProduct(id) {
+  if (!confirm('למחוק מוצר זה?')) return;
+  await sb('products?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  products = products.filter(p => p.id !== id);
+  renderProducts(); renderDashboard();
+}
+
+// ══════════════════════════════════════════
+//  SUPPLY
+// ══════════════════════════════════════════
+function renderSupply() {
+  const q = (document.getElementById('sup-search')?.value||'').toLowerCase();
+  const from = document.getElementById('sup-from')?.value||'';
+  const to = document.getElementById('sup-to')?.value||'';
+  let list = supply.filter(s => {
+    if (from && s.date < from) return false;
+    if (to && s.date > to) return false;
+    if (q) {
+      const p = getProduct(s.product_id);
+      const v = getVendor(s.supplier_id);
+      return (p && p.name.toLowerCase().includes(q)) || (v && v.name.toLowerCase().includes(q));
+    }
+    return true;
+  });
+  document.getElementById('sup-tbody').innerHTML = list.length ? list.map(s => {
+    const p = getProduct(s.product_id), v = getVendor(s.supplier_id);
+    return '<tr><td>' + fmtDate(s.date) + '</td><td><strong>' + esc(p?.name||'—') + '</strong></td><td>' + catBadge(p?.category_id) + '</td>' +
+      '<td class="tbl-num">' + s.qty + '</td><td class="tbl-num">' + fmtMoney(s.price) + '</td>' +
+      '<td style="font-size:.8rem">' + esc(v?.name||'—') + '</td><td style="font-size:.8rem;color:var(--fg3)">' + esc(s.notes||'—') + '</td>' +
+      '<td><button class="btn-sm" onclick="editSupply(\'' + s.id + '\')">עריכה</button> <button class="btn-sm btn-danger" onclick="deleteSupply(\'' + s.id + '\')">מחק</button></td></tr>';
+  }).join('') : '<tr><td colspan="8"><div class="empty">אין אספקות</div></td></tr>';
+}
+
+function openSupplyModal(id) {
+  const s = id ? supply.find(x => x.id === id) : null;
+  document.getElementById('sup-modal-title').textContent = s ? 'עריכת אספקה' : 'אספקה חדשה';
+  document.getElementById('sup-id').value = id || '';
+  document.getElementById('sup-date').value = s?.date || today();
+  document.getElementById('sup-qty').value = s?.qty || '';
+  document.getElementById('sup-price').value = s?.price || '';
+  document.getElementById('sup-notes').value = s?.notes || '';
+  document.getElementById('sup-product').innerHTML = '<option value="">בחר מוצר...</option>' + products.map(p => '<option value="' + p.id + '"' + (p.id===s?.product_id?' selected':'') + '>' + esc(p.name) + '</option>').join('');
+  document.getElementById('sup-vendor').innerHTML = '<option value="">ללא ספק</option>' + suppliers.map(v => '<option value="' + v.id + '"' + (v.id===s?.supplier_id?' selected':'') + '>' + esc(v.name) + '</option>').join('');
+  document.getElementById('modal-supply').classList.add('open');
+}
+function editSupply(id) { openSupplyModal(id); }
+
+async function saveSupply() {
+  const id = document.getElementById('sup-id').value;
+  const data = {
+    owner_id: uid(),
+    date: document.getElementById('sup-date').value,
+    product_id: document.getElementById('sup-product').value || null,
+    qty: parseFloat(document.getElementById('sup-qty').value) || 0,
+    price: parseFloat(document.getElementById('sup-price').value) || 0,
+    supplier_id: document.getElementById('sup-vendor').value || null,
+    notes: document.getElementById('sup-notes').value.trim() || null
+  };
+  if (!data.product_id || !data.date) { alert('נא לבחור תאריך ומוצר'); return; }
+  try {
+    if (id) {
+      await sb('supply?id=eq.' + id, { method: 'PATCH', body: data, prefer: 'return=minimal' });
+      const idx = supply.findIndex(s => s.id === id);
+      if (idx >= 0) supply[idx] = { ...supply[idx], ...data };
+    } else {
+      const rows = await sb('supply', { method: 'POST', body: data });
+      supply.unshift(rows[0]);
+    }
+    closeModal('modal-supply'); renderSupply(); renderDashboard();
+  } catch(e) { alert('שגיאה: ' + e.message); }
+}
+
+async function deleteSupply(id) {
+  if (!confirm('למחוק אספקה זו?')) return;
+  await sb('supply?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  supply = supply.filter(s => s.id !== id);
+  renderSupply(); renderDashboard();
+}
+
+// ══════════════════════════════════════════
+//  COUNTS
+// ══════════════════════════════════════════
+function renderCounts() {
+  const dateF = document.getElementById('cnt-date-filter')?.value||'';
+  const dates = [...new Set(counts.map(c => c.date))].sort().reverse();
+  const sel = document.getElementById('cnt-date-filter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">כל התאריכים</option>' + dates.map(d => '<option value="' + d + '"' + (d===cur?' selected':'') + '>' + fmtDate(d) + '</option>').join('');
+  if (cur && !dates.includes(cur)) sel.value = '';
+  const df = sel.value;
+  let list = counts.filter(c => !df || c.date === df);
+  document.getElementById('cnt-tbody').innerHTML = list.length ? list.map(c => {
+    const p = getProduct(c.product_id);
+    return '<tr><td>' + fmtDate(c.date) + '</td><td><strong>' + esc(p?.name||'—') + '</strong></td><td>' + catBadge(p?.category_id) + '</td>' +
+      '<td class="tbl-num" style="font-weight:700">' + c.count + '</td>' +
+      '<td style="font-size:.8rem;color:var(--fg3)">' + esc(c.notes||'—') + '</td>' +
+      '<td><button class="btn-sm" onclick="editCount(\'' + c.id + '\')">עריכה</button> <button class="btn-sm btn-danger" onclick="deleteCount(\'' + c.id + '\')">מחק</button></td></tr>';
+  }).join('') : '<tr><td colspan="6"><div class="empty">אין ספירות</div></td></tr>';
+}
+
+function openCountModal(id) {
+  const c = id ? counts.find(x => x.id === id) : null;
+  document.getElementById('cnt-modal-title').textContent = c ? 'עריכת ספירה' : 'ספירת מלאי חדשה';
+  document.getElementById('cnt-id').value = id || '';
+  document.getElementById('cnt-date').value = c?.date || today();
+  document.getElementById('cnt-count').value = c?.count || '';
+  document.getElementById('cnt-notes').value = c?.notes || '';
+  document.getElementById('cnt-product').innerHTML = '<option value="">בחר מוצר...</option>' + products.map(p => '<option value="' + p.id + '"' + (p.id===c?.product_id?' selected':'') + '>' + esc(p.name) + '</option>').join('');
+  document.getElementById('modal-count').classList.add('open');
+}
+function editCount(id) { openCountModal(id); }
+
+async function saveCount() {
+  const id = document.getElementById('cnt-id').value;
+  const data = {
+    owner_id: uid(),
+    date: document.getElementById('cnt-date').value,
+    product_id: document.getElementById('cnt-product').value || null,
+    count: parseFloat(document.getElementById('cnt-count').value) || 0,
+    notes: document.getElementById('cnt-notes').value.trim() || null
+  };
+  if (!data.product_id || !data.date) { alert('נא לבחור תאריך ומוצר'); return; }
+  try {
+    if (id) {
+      await sb('counts?id=eq.' + id, { method: 'PATCH', body: data, prefer: 'return=minimal' });
+      const idx = counts.findIndex(c => c.id === id);
+      if (idx >= 0) counts[idx] = { ...counts[idx], ...data };
+    } else {
+      const rows = await sb('counts', { method: 'POST', body: data });
+      counts.unshift(rows[0]);
+    }
+    closeModal('modal-count'); renderCounts(); renderDashboard();
+  } catch(e) { alert('שגיאה: ' + e.message); }
+}
+
+async function deleteCount(id) {
+  if (!confirm('למחוק ספירה זו?')) return;
+  await sb('counts?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  counts = counts.filter(c => c.id !== id);
+  renderCounts(); renderDashboard();
+}
+
+// ══════════════════════════════════════════
+//  REPORTS
+// ══════════════════════════════════════════
+function renderReport() {
+  const from = document.getElementById('rp-from').value;
+  const to = document.getElementById('rp-to').value;
+  const catF = document.getElementById('rp-cat').value;
+  const catSel = document.getElementById('rp-cat');
+  const cur = catSel.value;
+  catSel.innerHTML = '<option value="">כל הקטגוריות</option>' + categories.map(c => '<option value="' + c.id + '"' + (c.id===cur?' selected':'') + '>' + esc(c.name) + '</option>').join('');
+  if (!from || !to) { document.getElementById('rp-summary').innerHTML=''; document.getElementById('rp-table').innerHTML='<div class="empty">בחר טווח תאריכים</div>'; return; }
+  const list = products.filter(p => !catF || p.category_id === catF);
+  let tO=0,tA=0,tC=0,tS=0,tP=0;
+  const rows = list.map(p => {
+    const o = stockAt(p.id,from), a = supplyInRange(p.id,from,to), c = stockAt(p.id,to), s = o+a-c;
+    tO+=o; tA+=a; tC+=c; tS+=s; tP += s*(p.price||0);
+    return {p,o,a,c,s,pay:s*(p.price||0)};
+  }).filter(r => r.o||r.a||r.c||r.s);
+  document.getElementById('rp-summary').innerHTML =
+    '<div class="tile"><div class="tile-label">פתיחה</div><div class="tile-val">' + tO + '</div></div>' +
+    '<div class="tile"><div class="tile-label">הגיע</div><div class="tile-val">' + tA + '</div></div>' +
+    '<div class="tile"><div class="tile-label">סגירה</div><div class="tile-val">' + tC + '</div></div>' +
+    '<div class="tile ok"><div class="tile-label">נמכר</div><div class="tile-val">' + tS + '</div></div>' +
+    '<div class="tile ok"><div class="tile-label">הכנסה</div><div class="tile-val" style="font-size:1rem">' + fmtMoney(tP) + '</div></div>';
+  if (!rows.length) { document.getElementById('rp-table').innerHTML = '<div class="empty">אין נתונים</div>'; return; }
+  document.getElementById('rp-table').innerHTML = '<div class="card"><div class="tbl-wrap"><table><thead><tr><th>מוצר</th><th>קטגוריה</th><th>פתיחה</th><th>הגיע</th><th>סגירה</th><th>נמכר</th><th>הכנסה</th></tr></thead><tbody>' +
+    rows.map(r => '<tr><td><strong>' + esc(r.p.name) + '</strong></td><td>' + catBadge(r.p.category_id) + '</td><td class="tbl-num">' + r.o + '</td><td class="tbl-num">' + (r.a||'—') + '</td><td class="tbl-num">' + r.c + '</td><td class="tbl-num" style="font-weight:700;color:var(--ok)">' + (r.s||'—') + '</td><td class="tbl-num">' + fmtMoney(r.pay) + '</td></tr>').join('') +
+    '</tbody></table></div></div>';
+}
+
+// ══════════════════════════════════════════
+//  CATEGORIES
+// ══════════════════════════════════════════
+function renderCategories() {
+  let html = '';
+  categories.forEach(cat => {
+    const subs = subcategories.filter(s => s.category_id === cat.id);
+    const catProds = products.filter(p => p.category_id === cat.id);
+    html += '<div class="card" style="margin-bottom:12px"><div class="card-hd">' +
+      '<span>' + esc(cat.name) + ' <span style="font-weight:400;color:var(--fg3);font-size:.8rem">(' + catProds.length + ' מוצרים)</span></span>' +
+      '<div style="display:flex;gap:6px">' +
+      '<button class="btn-sm" onclick="openSubcatModal(\'' + cat.id + '\')">+ תת-קטגוריה</button>' +
+      '<button class="btn-sm" onclick="editCat(\'' + cat.id + '\')">עריכה</button>' +
+      '<button class="btn-sm btn-danger" onclick="deleteCat(\'' + cat.id + '\')">מחק</button>' +
+      '</div></div>';
+    if (subs.length) {
+      html += '<div class="card-body" style="padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px">';
+      subs.forEach(s => {
+        html += '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);padding:4px 10px;border-radius:20px;font-size:.82rem">' +
+          esc(s.name) +
+          '<button onclick="editSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--fg3);font-size:.8rem">✏️</button>' +
+          '<button onclick="deleteSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--err);font-size:.8rem">✕</button>' +
+          '</span>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+  document.getElementById('cat-tree').innerHTML = html || '<div class="empty">אין קטגוריות</div>';
+}
+
+function openCatModal(id) {
+  const c = id ? getCat(id) : null;
+  document.getElementById('cat-modal-title').textContent = c ? 'עריכת קטגוריה' : 'קטגוריה חדשה';
+  document.getElementById('cat-id').value = id || '';
+  document.getElementById('cat-name').value = c?.name || '';
+  document.getElementById('modal-cat').classList.add('open');
+}
+function editCat(id) { openCatModal(id); }
+
+async function saveCat() {
+  const id = document.getElementById('cat-id').value;
+  const name = document.getElementById('cat-name').value.trim();
+  if (!name) { alert('נא להזין שם'); return; }
+  const data = { name, owner_id: uid() };
+  try {
+    if (id) {
+      await sb('categories?id=eq.' + id, { method: 'PATCH', body: data, prefer: 'return=minimal' });
+      const idx = categories.findIndex(c => c.id === id);
+      if (idx >= 0) categories[idx] = { ...categories[idx], ...data };
+    } else {
+      const rows = await sb('categories', { method: 'POST', body: data });
+      categories.push(rows[0]);
+    }
+    closeModal('modal-cat'); renderCategories();
+  } catch(e) { alert('שגיאה: ' + e.message); }
+}
+
+async function deleteCat(id) {
+  if (!confirm('למחוק קטגוריה זו?')) return;
+  await sb('categories?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  categories = categories.filter(c => c.id !== id);
+  renderCategories();
+}
+
+function openSubcatModal(catId, id) {
+  const s = id ? getSubcat(id) : null;
+  document.getElementById('subcat-modal-title').textContent = s ? 'עריכת תת-קטגוריה' : 'תת-קטגוריה חדשה';
+  document.getElementById('subcat-id').value = id || '';
+  document.getElementById('subcat-cat-id').value = catId || s?.category_id || '';
+  document.getElementById('subcat-name').value = s?.name || '';
+  document.getElementById('modal-subcat').classList.add('open');
+}
+function editSubcat(id) {
+  const s = getSubcat(id);
+  if (s) openSubcatModal(s.category_id, id);
+}
+
+async function saveSubcat() {
+  const id = document.getElementById('subcat-id').value;
+  const name = document.getElementById('subcat-name').value.trim();
+  if (!name) { alert('נא להזין שם'); return; }
+  const data = { name, owner_id: uid(), category_id: document.getElementById('subcat-cat-id').value };
+  try {
+    if (id) {
+      await sb('subcategories?id=eq.' + id, { method: 'PATCH', body: data, prefer: 'return=minimal' });
+      const idx = subcategories.findIndex(s => s.id === id);
+      if (idx >= 0) subcategories[idx] = { ...subcategories[idx], ...data };
+    } else {
+      const rows = await sb('subcategories', { method: 'POST', body: data });
+      subcategories.push(rows[0]);
+    }
+    closeModal('modal-subcat'); renderCategories();
+  } catch(e) { alert('שגיאה: ' + e.message); }
+}
+
+async function deleteSubcat(id) {
+  if (!confirm('למחוק תת-קטגוריה זו?')) return;
+  await sb('subcategories?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  subcategories = subcategories.filter(s => s.id !== id);
+  renderCategories();
+}
+
+// ══════════════════════════════════════════
+//  SUPPLIERS
+// ══════════════════════════════════════════
+function renderSuppliers() {
+  document.getElementById('vendor-tbody').innerHTML = suppliers.length ? suppliers.map(s => {
+    const pay = s.payment_type === 'consignment' ? '<span class="badge" style="background:var(--ok-lt);color:var(--ok)">קונסיגנציה</span>' : '<span class="badge" style="background:var(--surface2);color:var(--fg3)">רכישה מראש</span>';
+    return '<tr><td><strong>' + esc(s.name) + '</strong></td><td>' + esc(s.contact||'—') + '</td><td style="direction:ltr">' + esc(s.phone||'—') + '</td><td>' + pay + '</td>' +
+      '<td><button class="btn-sm" onclick="editVendor(\'' + s.id + '\')">עריכה</button> <button class="btn-sm btn-danger" onclick="deleteVendor(\'' + s.id + '\')">מחק</button></td></tr>';
+  }).join('') : '<tr><td colspan="5"><div class="empty">אין ספקים</div></td></tr>';
+}
+
+function openVendorModal(id) {
+  const v = id ? getVendor(id) : null;
+  document.getElementById('vendor-modal-title').textContent = v ? 'עריכת ספק' : 'ספק חדש';
+  document.getElementById('vendor-id').value = id || '';
+  document.getElementById('vendor-name').value = v?.name || '';
+  document.getElementById('vendor-contact').value = v?.contact || '';
+  document.getElementById('vendor-phone').value = v?.phone || '';
+  document.getElementById('vendor-email').value = v?.email || '';
+  document.getElementById('vendor-payment').value = v?.payment_type || 'upfront';
+  document.getElementById('modal-vendor').classList.add('open');
+}
+function editVendor(id) { openVendorModal(id); }
+
+async function saveVendor() {
+  const id = document.getElementById('vendor-id').value;
+  const name = document.getElementById('vendor-name').value.trim();
+  if (!name) { alert('נא להזין שם ספק'); return; }
+  const data = {
+    name, owner_id: uid(),
+    contact: document.getElementById('vendor-contact').value.trim() || null,
+    phone: document.getElementById('vendor-phone').value.trim() || null,
+    email: document.getElementById('vendor-email').value.trim() || null,
+    payment_type: document.getElementById('vendor-payment').value
+  };
+  try {
+    if (id) {
+      await sb('suppliers?id=eq.' + id, { method: 'PATCH', body: data, prefer: 'return=minimal' });
+      const idx = suppliers.findIndex(s => s.id === id);
+      if (idx >= 0) suppliers[idx] = { ...suppliers[idx], ...data };
+    } else {
+      const rows = await sb('suppliers', { method: 'POST', body: data });
+      suppliers.push(rows[0]);
+    }
+    closeModal('modal-vendor'); renderSuppliers();
+  } catch(e) { alert('שגיאה: ' + e.message); }
+}
+
+async function deleteVendor(id) {
+  if (!confirm('למחוק ספק זה?')) return;
+  await sb('suppliers?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  suppliers = suppliers.filter(s => s.id !== id);
+  renderSuppliers();
+}
+
+// ══════════════════════════════════════════
+//  ADMIN — ניהול משתמשים (רק owner)
+// ══════════════════════════════════════════
+async function renderAdmin() {
+  if (currentDbUser?.role !== 'owner') {
+    document.getElementById('users-list').innerHTML = '<div class="empty">אין הרשאה</div>';
+    return;
+  }
+  document.getElementById('users-list').innerHTML = '<div class="spinner">טוען...</div>';
+  try {
+    const rows = await sb('users?order=created_at.asc&select=*');
+    document.getElementById('users-list').innerHTML = rows.map(u =>
+      '<div class="user-row">' +
+      '<div class="user-info"><div class="user-name">' + esc(u.full_name||'—') + '</div><div class="user-email">' + esc(u.email) + '</div></div>' +
+      '<span class="role-badge ' + (u.role==='owner'?'role-owner':'role-user') + '">' + (u.role==='owner'?'בעלים':'משתמש') + '</span>' +
+      (u.id !== currentUser.id ? '<button class="btn-sm btn-danger" onclick="removeUser(\'' + u.id + '\')">הסר</button>' : '') +
+      '</div>'
+    ).join('');
+  } catch(e) { document.getElementById('users-list').innerHTML = '<div class="empty">שגיאה: ' + esc(e.message) + '</div>'; }
+}
+
+function openInviteModal() {
+  document.getElementById('invite-email').value = '';
+  document.getElementById('invite-name').value = '';
+  document.getElementById('invite-pass').value = '';
+  document.getElementById('invite-err').textContent = '';
+  document.getElementById('modal-invite').classList.add('open');
+}
+
+async function createUser() {
+  const email = document.getElementById('invite-email').value.trim();
+  const name = document.getElementById('invite-name').value.trim();
+  const pass = document.getElementById('invite-pass').value;
+  document.getElementById('invite-err').textContent = '';
+  if (!email || !name || !pass) { document.getElementById('invite-err').textContent = 'נא למלא את כל השדות'; return; }
+  if (pass.length < 6) { document.getElementById('invite-err').textContent = 'סיסמה חייבת להיות לפחות 6 תווים'; return; }
+  try {
+    // Create auth user via admin endpoint (requires service role — here we use signup)
+    const authData = await sbAuth('signup', { email, password: pass });
+    // Insert user record
+    await sb('users', { method: 'POST', body: { id: authData.user.id, email, full_name: name, role: 'user' } });
+    document.getElementById('invite-err').textContent = 'המשתמש נוצר בהצלחה!';
+    document.getElementById('invite-err').style.color = 'var(--ok)';
+    setTimeout(() => { closeModal('modal-invite'); renderAdmin(); }, 1500);
+  } catch(e) {
+    document.getElementById('invite-err').textContent = 'שגיאה: ' + e.message;
+    document.getElementById('invite-err').style.color = 'var(--err)';
+  }
+}
+
+async function removeUser(id) {
+  if (!confirm('להסיר משתמש זה מהמערכת?')) return;
+  try {
+    await sb('users?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+    renderAdmin();
+  } catch(e) { alert('שגיאה: ' + e.message); }
+}
+
+// ══════════════════════════════════════════
+//  MODAL UTILS
+// ══════════════════════════════════════════
+function closeModal(id) {
+  document.getElementById(id)?.classList.remove('open');
+}
+document.querySelectorAll('.modal-backdrop').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop.open').forEach(el => el.classList.remove('open'));
+});
+
+// Enter to login
+document.getElementById('auth-pass').addEventListener('keydown', e => { if (e.key === 'Enter') signIn(); });
+</script>
