@@ -202,6 +202,11 @@ tr:hover td { background: var(--surface2); }
 .dash-search-bar input, .dash-search-bar select { padding:8px 12px; border:1px solid var(--border); border-radius:var(--rs); background:var(--surface); color:var(--fg); font-size:.88rem; font-family:inherit; }
 .dash-search-bar input { flex:1; min-width:160px; }
 .dash-results { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; margin-bottom:20px; }
+.dash-results.list-view { display:block; }
+.dash-results.list-view .dash-prod-card { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:10px; border-radius:var(--rs); padding:9px 14px; margin-bottom:4px; }
+.dash-results.list-view .dash-prod-card .dpc-name { font-size:.9rem; }
+.dash-results.list-view .dash-prod-card .dpc-details { font-size:.76rem; color:var(--fg3); }
+.dash-results.list-view .dash-prod-card .dpc-stock { font-size:.95rem; min-width:40px; text-align:center; }
 .dash-prod-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:12px 14px; cursor:pointer; transition:box-shadow .15s; }
 .dash-prod-card:hover { box-shadow:0 2px 12px rgba(0,0,0,.1); }
 .dash-prod-card .dpc-name { font-weight:700; font-size:.9rem; margin-bottom:4px; }
@@ -285,6 +290,7 @@ tr:hover td { background: var(--surface2); }
               <option value="low">מלאי נמוך (1–5)</option>
               <option value="zero">אזל מהמלאי</option>
             </select>
+            <button class="btn-sm" id="dash-view-btn" onclick="toggleDashView()" title="החלף תצוגה">☰ רשימה</button>
           </div>
           <div id="dash-results" class="dash-results"></div>
         </div>
@@ -350,14 +356,21 @@ tr:hover td { background: var(--surface2); }
 
     <!-- REPORTS -->
     <div id="tab-reports" class="panel">
-      <div class="section-title">דוחות</div>
-      <div class="fbar">
-        <label>מ-</label><input type="date" id="rp-from" onchange="renderReport()">
-        <label>עד-</label><input type="date" id="rp-to" onchange="renderReport()">
-        <select id="rp-cat" onchange="renderReport()"><option value="">כל הקטגוריות</option></select>
+      <div class="section-title">דוחות מלאי</div>
+      <div class="fbar" style="flex-wrap:wrap;gap:8px">
+        <label style="font-size:.82rem;color:var(--fg2)">מ-</label>
+        <input type="date" id="rp-from" onchange="renderReport()" style="max-width:140px">
+        <label style="font-size:.82rem;color:var(--fg2)">עד-</label>
+        <input type="date" id="rp-to" onchange="renderReport()" style="max-width:140px">
+        <select id="rp-cat" onchange="renderReport()" style="min-width:140px"><option value="">כל הקטגוריות</option></select>
+        <div style="display:flex;gap:6px;margin-right:auto">
+          <button class="btn-sm" id="rp-view-toggle" onclick="toggleRpView()">📋 תצוגת תנועות</button>
+        </div>
       </div>
+      <div id="rp-date-heb" style="font-size:.8rem;color:var(--fg3);margin:6px 0 2px;min-height:18px"></div>
       <div id="rp-summary" class="tiles"></div>
       <div id="rp-table"></div>
+      <div id="rp-movements" style="display:none"></div>
     </div>
 
     <!-- CATEGORIES -->
@@ -470,15 +483,37 @@ tr:hover td { background: var(--surface2); }
 </div>
 
 <div class="modal-backdrop" id="modal-subcat">
-  <div class="modal" style="max-width:560px">
+  <div class="modal" style="max-width:580px">
     <div class="modal-title" id="subcat-modal-title">תת-קטגוריה חדשה</div>
     <input type="hidden" id="subcat-id">
     <input type="hidden" id="subcat-cat-id">
     <div class="form-group"><label>שם *</label><input id="subcat-name"></div>
     <div style="margin-bottom:14px">
-      <div style="font-size:.8rem;font-weight:700;color:var(--fg2);margin-bottom:8px">פרטים מותאמים אישית (שדות ייחודיים למוצרים בתת-קטגוריה זו)</div>
+      <div style="font-size:.8rem;font-weight:700;color:var(--fg2);margin-bottom:8px">📋 פרטים מותאמים למוצרים בתת-קטגוריה זו</div>
       <div id="subcat-detail-types-list"></div>
-      <button class="btn-sm" style="margin-top:8px" onclick="addSubcatDetailType()">+ הוסף שדה פרט</button>
+      <!-- טופס הוספת שדה inline -->
+      <div id="subcat-add-field-form" style="background:var(--surface2);border-radius:var(--rs);padding:12px;margin-top:8px;display:none">
+        <div style="font-size:.8rem;font-weight:700;color:var(--accent);margin-bottom:8px">הוספת שדה חדש</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group" style="margin:0"><label>שם השדה *</label><input id="new-dt-label" placeholder="לדוגמא: מידה"></div>
+          <div class="form-group" style="margin:0"><label>סוג</label>
+            <select id="new-dt-type">
+              <option value="text">טקסט חופשי</option>
+              <option value="number">מספר</option>
+              <option value="select">רשימה</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" id="new-dt-values-wrap" style="margin:0;display:none">
+          <label>ערכים אפשריים (מופרדים בפסיק)</label>
+          <input id="new-dt-values" placeholder="לדוגמא: S, M, L, XL">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn-sm btn-primary" onclick="confirmAddDetailType()">הוסף שדה</button>
+          <button class="btn-sm" onclick="document.getElementById('subcat-add-field-form').style.display='none'">ביטול</button>
+        </div>
+      </div>
+      <button class="btn-sm" style="margin-top:8px" onclick="showAddDetailTypeForm()">+ הוסף שדה פרט</button>
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-subcat')">ביטול</button>
@@ -689,6 +724,22 @@ async function loadAll() {
 const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const fmtDate = d => { if (!d) return '—'; const [y,m,dd] = d.split('-'); return dd+'/'+m+'/'+(y||'').slice(2); };
 const fmtMoney = v => v == null ? '—' : (Number(v)<0?'-₪':'₪') + Math.abs(Number(v)).toLocaleString('he-IL',{minimumFractionDigits:0,maximumFractionDigits:2});
+
+// תאריך עברי מלא
+function fmtHebrewDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const [y,m,d] = dateStr.split('-').map(Number);
+    const heb = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {day:'numeric',month:'long',year:'numeric'}).format(new Date(y,m-1,d));
+    return heb;
+  } catch(e) { return ''; }
+}
+function fmtDateFull(dateStr) {
+  if (!dateStr) return '—';
+  const greg = fmtDate(dateStr);
+  const heb = fmtHebrewDate(dateStr);
+  return greg + (heb ? ' <span style="font-size:.78em;color:var(--fg3);direction:rtl">' + heb + '</span>' : '');
+}
 const getCat = id => categories.find(c=>c.id===id);
 const getSubcat = id => subcategories.find(s=>s.id===id);
 const getVendor = id => suppliers.find(s=>s.id===id);
@@ -788,6 +839,15 @@ function initDashSearch() {
   catSel.onchange = () => { initDashSearch(); renderDashSearch(); };
 }
 
+let _dashView = 'grid'; // 'grid' | 'list'
+
+function toggleDashView() {
+  _dashView = _dashView === 'grid' ? 'list' : 'grid';
+  const btn = document.getElementById('dash-view-btn');
+  if (btn) btn.textContent = _dashView === 'grid' ? '☰ רשימה' : '⊞ כרטיסים';
+  renderDashSearch();
+}
+
 function renderDashSearch() {
   const q = (document.getElementById('dash-search')?.value||'').toLowerCase();
   const catF = document.getElementById('dash-cat-filter')?.value||'';
@@ -796,7 +856,13 @@ function renderDashSearch() {
   const container = document.getElementById('dash-results');
   if (!container) return;
 
-  if (!q && !catF && !subF && !stockF) { container.innerHTML = '<div style="color:var(--fg3);font-size:.85rem">הקלד לחיפוש או בחר פילטר...</div>'; return; }
+  // עדכן class תצוגה
+  container.className = 'dash-results' + (_dashView === 'list' ? ' list-view' : '');
+
+  if (!q && !catF && !subF && !stockF) {
+    container.innerHTML = '<div style="color:var(--fg3);font-size:.85rem;padding:8px">הקלד לחיפוש או בחר פילטר...</div>';
+    return;
+  }
 
   let list = products.filter(p => {
     if (catF && p.category_id !== catF) return false;
@@ -813,22 +879,45 @@ function renderDashSearch() {
 
   if (!list.length) { container.innerHTML = '<div class="empty">לא נמצאו מוצרים</div>'; return; }
 
-  container.innerHTML = list.slice(0,24).map(p => {
-    const stk = currentStock(p.id);
-    const cls = stk === 0 ? 'err' : stk <= 5 ? 'warn' : 'ok';
-    const sub = getSubcat(p.subcategory_id);
-    const cat = getCat(p.category_id);
-    return '<div class="dash-prod-card" onclick="editProduct(\'' + p.id + '\')">' +
-      '<div class="dpc-name">' + esc(p.name) + '</div>' +
-      '<div class="dpc-details">' +
-        (cat ? '<span class="badge badge-cat" style="font-size:.7rem">' + esc(cat.name) + '</span> ' : '') +
-        (sub ? '<span style="font-size:.76rem;color:var(--fg3)">' + esc(sub.name) + '</span>' : '') +
-      '</div>' +
-      '<div style="margin-bottom:4px">' + detailBadges(p) + '</div>' +
-      '<div class="dpc-stock ' + cls + '">' + stk + ' <span style="font-size:.7rem;font-weight:400">יח\'</span></div>' +
-      (p.price ? '<div style="font-size:.78rem;color:var(--fg3)">מחיר: ' + fmtMoney(p.price) + '</div>' : '') +
-      '</div>';
-  }).join('') + (list.length > 24 ? '<div style="color:var(--fg3);font-size:.82rem;padding:8px">ועוד ' + (list.length-24) + ' מוצרים...</div>' : '');
+  if (_dashView === 'list') {
+    // תצוגת רשימה
+    container.innerHTML = list.slice(0,50).map(p => {
+      const stk = currentStock(p.id);
+      const cls = stk === 0 ? 'err' : stk <= 5 ? 'warn' : 'ok';
+      const sub = getSubcat(p.subcategory_id);
+      const cat = getCat(p.category_id);
+      return '<div class="dash-prod-card" onclick="editProduct(\'' + p.id + '\')">' +
+        '<div>' +
+          '<div class="dpc-name">' + esc(p.name) + '</div>' +
+          '<div class="dpc-details">' +
+            (cat ? '<span class="badge badge-cat" style="font-size:.68rem">' + esc(cat.name) + '</span> ' : '') +
+            (sub ? '<span style="font-size:.74rem;color:var(--fg3)">' + esc(sub.name) + '</span> ' : '') +
+            detailBadges(p) +
+          '</div>' +
+        '</div>' +
+        (p.price ? '<div style="font-size:.8rem;color:var(--fg3)">' + fmtMoney(p.price) + '</div>' : '<div></div>') +
+        '<div class="dpc-stock ' + cls + '">' + stk + '</div>' +
+        '</div>';
+    }).join('') + (list.length > 50 ? '<div style="color:var(--fg3);font-size:.82rem;padding:8px">ועוד ' + (list.length-50) + ' מוצרים...</div>' : '');
+  } else {
+    // תצוגת כרטיסים
+    container.innerHTML = list.slice(0,24).map(p => {
+      const stk = currentStock(p.id);
+      const cls = stk === 0 ? 'err' : stk <= 5 ? 'warn' : 'ok';
+      const sub = getSubcat(p.subcategory_id);
+      const cat = getCat(p.category_id);
+      return '<div class="dash-prod-card" onclick="editProduct(\'' + p.id + '\')">' +
+        '<div class="dpc-name">' + esc(p.name) + '</div>' +
+        '<div class="dpc-details">' +
+          (cat ? '<span class="badge badge-cat" style="font-size:.7rem">' + esc(cat.name) + '</span> ' : '') +
+          (sub ? '<span style="font-size:.76rem;color:var(--fg3)">' + esc(sub.name) + '</span>' : '') +
+        '</div>' +
+        '<div style="margin-bottom:4px">' + detailBadges(p) + '</div>' +
+        '<div class="dpc-stock ' + cls + '">' + stk + ' <span style="font-size:.7rem;font-weight:400">יח\'</span></div>' +
+        (p.price ? '<div style="font-size:.78rem;color:var(--fg3)">מחיר: ' + fmtMoney(p.price) + '</div>' : '') +
+        '</div>';
+    }).join('') + (list.length > 24 ? '<div style="color:var(--fg3);font-size:.82rem;padding:8px">ועוד ' + (list.length-24) + ' מוצרים...</div>' : '');
+  }
 }
 
 // ══════════════════════════════════════════
@@ -885,7 +974,7 @@ function renderProducts() {
 
 // עדכון שדות דינמיים כשמשנים תת-קטגוריה
 function onProdSubcatChange() {
-  const subcatId = document.getElementById('prod-subcat').value;
+  const subcatId = document.getElementById('prod-subcat')?.value;
   const detailTypes = getDetailTypes(subcatId);
   const container = document.getElementById('prod-details-fields');
   if (!container) return;
@@ -895,17 +984,23 @@ function onProdSubcatChange() {
   const prodId = document.getElementById('prod-id').value;
   const existing = prodId ? (getProduct(prodId)?.details || {}) : {};
 
-  container.innerHTML = detailTypes.map(dt => {
-    const val = existing[dt.label] !== undefined ? existing[dt.label] : '';
-    if (dt.inputType === 'number') {
-      return '<div class="form-group"><label>' + esc(dt.label) + '</label><input type="number" data-detail="' + esc(dt.label) + '" value="' + esc(String(val)) + '" step="any"></div>';
-    } else if (dt.allowedValues && dt.allowedValues.length) {
-      const opts = dt.allowedValues.map(v => '<option value="' + esc(String(v)) + '"' + (String(v)===String(val)?' selected':'') + '>' + esc(String(v)) + '</option>').join('');
-      return '<div class="form-group"><label>' + esc(dt.label) + '</label><select data-detail="' + esc(dt.label) + '"><option value="">—</option>' + opts + '</select></div>';
-    } else {
-      return '<div class="form-group"><label>' + esc(dt.label) + '</label><input type="text" data-detail="' + esc(dt.label) + '" value="' + esc(String(val)) + '"></div>';
-    }
-  }).join('');
+  // כותרת סקשן + שדות
+  const subcat = getSubcat(subcatId);
+  container.innerHTML =
+    '<div class="details-section-title">📋 פרטים מיוחדים — ' + esc(subcat?.name||'') + '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">' +
+    detailTypes.map(dt => {
+      const val = existing[dt.label] !== undefined ? existing[dt.label] : '';
+      if (dt.inputType === 'number') {
+        return '<div class="form-group" style="margin:0"><label>' + esc(dt.label) + '</label><input type="number" data-detail="' + esc(dt.label) + '" value="' + esc(String(val)) + '" step="any"></div>';
+      } else if (dt.allowedValues && dt.allowedValues.length) {
+        const opts = dt.allowedValues.map(v => '<option value="' + esc(String(v)) + '"' + (String(v)===String(val)?' selected':'') + '>' + esc(String(v)) + '</option>').join('');
+        return '<div class="form-group" style="margin:0"><label>' + esc(dt.label) + '</label><select data-detail="' + esc(dt.label) + '"><option value="">—</option>' + opts + '</select></div>';
+      } else {
+        return '<div class="form-group" style="margin:0"><label>' + esc(dt.label) + '</label><input type="text" data-detail="' + esc(dt.label) + '" value="' + esc(String(val)) + '"></div>';
+      }
+    }).join('') +
+    '</div>';
 }
 
 function openProductModal(id) {
@@ -920,7 +1015,9 @@ function openProductModal(id) {
   catSel.innerHTML = '<option value="">ללא קטגוריה</option>' + categories.map(c => '<option value="' + c.id + '"' + (c.id===p?.category_id?' selected':'') + '>' + esc(c.name) + '</option>').join('');
   const subSel = document.getElementById('prod-subcat');
   const subs = subcategories.filter(s => s.category_id === (p?.category_id || catSel.value));
-  subSel.innerHTML = '<option value="">ללא תת-קטגוריה</option>' + subs.map(s => '<option value="' + s.id + '"' + (s.id===p?.subcategory_id?' selected':'') + '>' + esc(s.name) + '</option>').join('');
+  subSel.innerHTML = '<option value="">ללא תת-קטגוריה</option>' + subs.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
+  // הגדר ערך מפורש — חשוב! בלי זה selected attribute לא תמיד עובד
+  subSel.value = p?.subcategory_id || '';
   catSel.onchange = () => {
     const ss = subcategories.filter(s => s.category_id === catSel.value);
     subSel.innerHTML = '<option value="">ללא תת-קטגוריה</option>' + ss.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
@@ -931,7 +1028,7 @@ function openProductModal(id) {
   const vSel = document.getElementById('prod-vendor');
   vSel.innerHTML = '<option value="">ללא ספק</option>' + suppliers.map(v => '<option value="' + v.id + '"' + (v.id===p?.supplier_id?' selected':'') + '>' + esc(v.name) + '</option>').join('');
   document.getElementById('modal-product').classList.add('open');
-  // אתחול שדות דינמיים — מיידי (ה-DOM כבר עודכן לפני classList.add)
+  // אתחול שדות דינמיים עם הפרטים של המוצר
   onProdSubcatChange();
 }
 function editProduct(id) { openProductModal(id); }
@@ -1126,30 +1223,145 @@ async function deleteCount(id) {
 // ══════════════════════════════════════════
 //  REPORTS
 // ══════════════════════════════════════════
+let _rpView = 'table'; // 'table' | 'movements'
+
+function toggleRpView() {
+  _rpView = _rpView === 'table' ? 'movements' : 'table';
+  document.getElementById('rp-view-toggle').textContent = _rpView === 'table' ? '📋 תצוגת תנועות' : '📊 תצוגת טבלה';
+  document.getElementById('rp-table').style.display = _rpView === 'table' ? '' : 'none';
+  document.getElementById('rp-movements').style.display = _rpView === 'movements' ? '' : 'none';
+}
+
 function renderReport() {
   const from = document.getElementById('rp-from').value;
-  const to = document.getElementById('rp-to').value;
-  const catF = document.getElementById('rp-cat').value;
+  const to   = document.getElementById('rp-to').value;
   const catSel = document.getElementById('rp-cat');
+  const catF = catSel.value;
+  // עדכן dropdown קטגוריות
   const cur = catSel.value;
   catSel.innerHTML = '<option value="">כל הקטגוריות</option>' + categories.map(c => '<option value="' + c.id + '"' + (c.id===cur?' selected':'') + '>' + esc(c.name) + '</option>').join('');
-  if (!from || !to) { document.getElementById('rp-summary').innerHTML=''; document.getElementById('rp-table').innerHTML='<div class="empty">בחר טווח תאריכים</div>'; return; }
+
+  // תאריכים עבריים
+  const hebFrom = from ? fmtHebrewDate(from) : '';
+  const hebTo   = to   ? fmtHebrewDate(to)   : '';
+  const hebEl = document.getElementById('rp-date-heb');
+  if (from && to && hebEl) {
+    hebEl.innerHTML = '📅 ' + hebFrom + ' — ' + hebTo;
+  } else if (hebEl) hebEl.innerHTML = '';
+
+  if (!from || !to) {
+    document.getElementById('rp-summary').innerHTML = '';
+    document.getElementById('rp-table').innerHTML = '<div class="empty">בחר טווח תאריכים להצגת הדוח</div>';
+    document.getElementById('rp-movements').innerHTML = '';
+    return;
+  }
+
   const list = products.filter(p => !catF || p.category_id === catF);
-  let tO=0,tA=0,tC=0,tS=0,tP=0;
+  let tO=0, tA=0, tC=0, tS=0, tP=0;
+
   const rows = list.map(p => {
-    const o = stockAt(p.id,from), a = supplyInRange(p.id,from,to), c = stockAt(p.id,to), s = o+a-c;
+    const o = stockAt(p.id, from);
+    const a = supplyInRange(p.id, from, to);
+    const c = stockAt(p.id, to);
+    const s = o + a - c;
     tO+=o; tA+=a; tC+=c; tS+=s; tP += s*(p.price||0);
-    return {p,o,a,c,s,pay:s*(p.price||0)};
-  }).filter(r => r.o||r.a||r.c||r.s);
+    return { p, o, a, c, s, pay: s*(p.price||0) };
+  }).filter(r => r.o || r.a || r.c || r.s);
+
+  // סיכום
   document.getElementById('rp-summary').innerHTML =
-    '<div class="tile"><div class="tile-label">פתיחה</div><div class="tile-val">' + tO + '</div></div>' +
-    '<div class="tile"><div class="tile-label">הגיע</div><div class="tile-val">' + tA + '</div></div>' +
-    '<div class="tile"><div class="tile-label">סגירה</div><div class="tile-val">' + tC + '</div></div>' +
+    '<div class="tile"><div class="tile-label">מלאי פתיחה</div><div class="tile-val">' + tO + '</div></div>' +
+    '<div class="tile"><div class="tile-label">קניות (אספקה)</div><div class="tile-val" style="color:var(--accent)">' + tA + '</div></div>' +
+    '<div class="tile"><div class="tile-label">מלאי סגירה</div><div class="tile-val">' + tC + '</div></div>' +
     '<div class="tile ok"><div class="tile-label">נמכר</div><div class="tile-val">' + tS + '</div></div>' +
     '<div class="tile ok"><div class="tile-label">הכנסה</div><div class="tile-val" style="font-size:1rem">' + fmtMoney(tP) + '</div></div>';
-  if (!rows.length) { document.getElementById('rp-table').innerHTML = '<div class="empty">אין נתונים</div>'; return; }
-  document.getElementById('rp-table').innerHTML = '<div class="card"><div class="tbl-wrap"><table><thead><tr><th>מוצר</th><th>קטגוריה</th><th>פתיחה</th><th>הגיע</th><th>סגירה</th><th>נמכר</th><th>הכנסה</th></tr></thead><tbody>' +
-    rows.map(r => '<tr><td><strong>' + esc(r.p.name) + '</strong></td><td>' + catBadge(r.p.category_id) + '</td><td class="tbl-num">' + r.o + '</td><td class="tbl-num">' + (r.a||'—') + '</td><td class="tbl-num">' + r.c + '</td><td class="tbl-num" style="font-weight:700;color:var(--ok)">' + (r.s||'—') + '</td><td class="tbl-num">' + fmtMoney(r.pay) + '</td></tr>').join('') +
+
+  if (!rows.length) {
+    document.getElementById('rp-table').innerHTML = '<div class="empty">אין נתונים לתקופה זו</div>';
+    document.getElementById('rp-movements').innerHTML = '';
+    return;
+  }
+
+  // טבלת מוצרים עם פרטים נוספים
+  document.getElementById('rp-table').innerHTML = '<div class="card"><div class="tbl-wrap"><table>' +
+    '<thead><tr>' +
+    '<th>מוצר</th><th>פרטים</th><th>קטגוריה</th>' +
+    '<th style="text-align:center">פתיחה</th>' +
+    '<th style="text-align:center;color:var(--accent)">קניות</th>' +
+    '<th style="text-align:center">סגירה</th>' +
+    '<th style="text-align:center;color:var(--ok)">נמכר</th>' +
+    '<th style="text-align:left">הכנסה</th>' +
+    '</tr></thead><tbody>' +
+    rows.map(r => {
+      const badges = detailBadges(r.p);
+      return '<tr>' +
+        '<td><strong>' + esc(r.p.name) + '</strong></td>' +
+        '<td>' + (badges || '<span style="color:var(--fg3);font-size:.78rem">—</span>') + '</td>' +
+        '<td>' + catBadge(r.p.category_id) + '</td>' +
+        '<td class="tbl-num">' + (r.o || '—') + '</td>' +
+        '<td class="tbl-num" style="color:var(--accent);font-weight:600">' + (r.a || '—') + '</td>' +
+        '<td class="tbl-num">' + (r.c || '—') + '</td>' +
+        '<td class="tbl-num" style="font-weight:700;color:' + (r.s>0?'var(--ok)':r.s<0?'var(--err)':'var(--fg3)') + '">' + (r.s || '—') + '</td>' +
+        '<td class="tbl-num">' + (r.pay ? fmtMoney(r.pay) : '—') + '</td>' +
+        '</tr>';
+    }).join('') +
+    '<tr style="background:var(--surface2);font-weight:700">' +
+    '<td colspan="3">סה"כ</td>' +
+    '<td class="tbl-num">' + tO + '</td>' +
+    '<td class="tbl-num" style="color:var(--accent)">' + tA + '</td>' +
+    '<td class="tbl-num">' + tC + '</td>' +
+    '<td class="tbl-num" style="color:var(--ok)">' + tS + '</td>' +
+    '<td class="tbl-num">' + fmtMoney(tP) + '</td>' +
+    '</tr>' +
+    '</tbody></table></div></div>';
+
+  // תצוגת תנועות — היסטוריית אספקה+ספירות בתקופה לפי קטגוריה
+  renderRpMovements(from, to, catF);
+
+  // הצג/הסתר לפי view
+  document.getElementById('rp-table').style.display = _rpView === 'table' ? '' : 'none';
+  document.getElementById('rp-movements').style.display = _rpView === 'movements' ? '' : 'none';
+}
+
+function renderRpMovements(from, to, catF) {
+  // אסוף תנועות: אספקה + ספירות מלאי
+  const supplyEvts = supply
+    .filter(s => s.date >= from && s.date <= to)
+    .filter(s => !catF || (getProduct(s.product_id)?.category_id === catF))
+    .map(s => {
+      const p = getProduct(s.product_id);
+      return { date: s.date, type: 'supply', typeLbl: '📦 אספקה', product: p?.name||'?', details: detailBadges(p), qty: s.quantity, note: s.notes||'', catId: p?.category_id };
+    });
+
+  const countEvts = counts
+    .filter(c => c.date >= from && c.date <= to)
+    .filter(c => !catF || (getProduct(c.product_id)?.category_id === catF))
+    .map(c => {
+      const p = getProduct(c.product_id);
+      return { date: c.date, type: 'count', typeLbl: '🔢 ספירה', product: p?.name||'?', details: detailBadges(p), qty: c.quantity, note: c.notes||'', catId: p?.category_id };
+    });
+
+  const all = [...supplyEvts, ...countEvts].sort((a,b) => b.date.localeCompare(a.date));
+
+  if (!all.length) {
+    document.getElementById('rp-movements').innerHTML = '<div class="empty">אין תנועות מלאי בתקופה זו</div>';
+    return;
+  }
+
+  document.getElementById('rp-movements').innerHTML = '<div class="card"><div style="padding:10px 16px;font-weight:700;font-size:.88rem;color:var(--fg2)">היסטוריית תנועות מלאי בתקופה</div><div class="tbl-wrap"><table>' +
+    '<thead><tr><th>תאריך</th><th>תאריך עברי</th><th>סוג</th><th>מוצר</th><th>פרטים</th><th>קטגוריה</th><th style="text-align:center">כמות</th><th>הערות</th></tr></thead><tbody>' +
+    all.map(ev =>
+      '<tr>' +
+      '<td style="white-space:nowrap">' + fmtDate(ev.date) + '</td>' +
+      '<td style="font-size:.78rem;color:var(--fg3);white-space:nowrap">' + (fmtHebrewDate(ev.date)||'—') + '</td>' +
+      '<td><span style="font-size:.8rem;padding:2px 7px;border-radius:12px;background:' + (ev.type==='supply'?'var(--accent-lt)':'var(--surface2)') + ';color:' + (ev.type==='supply'?'var(--accent)':'var(--fg2)') + '">' + ev.typeLbl + '</span></td>' +
+      '<td><strong style="font-size:.87rem">' + esc(ev.product) + '</strong></td>' +
+      '<td>' + (ev.details||'—') + '</td>' +
+      '<td>' + catBadge(ev.catId) + '</td>' +
+      '<td class="tbl-num" style="font-weight:700">' + ev.qty + '</td>' +
+      '<td style="font-size:.8rem;color:var(--fg3)">' + esc(ev.note) + '</td>' +
+      '</tr>'
+    ).join('') +
     '</tbody></table></div></div>';
 }
 
@@ -1228,31 +1440,53 @@ function renderSubcatDetailTypesList() {
   const list = document.getElementById('subcat-detail-types-list');
   if (!list) return;
   const items = window._subcatDetailTypes || [];
-  if (!items.length) { list.innerHTML = '<div style="color:var(--fg3);font-size:.82rem;padding:6px 0">אין שדות מוגדרים</div>'; return; }
+  if (!items.length) { list.innerHTML = '<div style="color:var(--fg3);font-size:.82rem;padding:8px 0;text-align:center">אין שדות מוגדרים עדיין</div>'; return; }
   list.innerHTML = items.map((dt, idx) => {
-    const avStr = dt.allowedValues ? dt.allowedValues.join(', ') : '';
-    return '<div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:var(--rs);padding:7px 10px;margin-bottom:6px;flex-wrap:wrap">' +
-      '<strong style="font-size:.85rem;flex:1">' + esc(dt.label) + '</strong>' +
-      '<span style="font-size:.76rem;color:var(--fg3)">' + (dt.inputType==='number'?'מספר':'טקסט') + '</span>' +
-      (avStr ? '<span style="font-size:.76rem;color:var(--fg3)">ערכים: ' + esc(avStr) + '</span>' : '') +
-      '<button class="btn-sm btn-danger" onclick="removeSubcatDetailType(' + idx + ')">✕</button>' +
+    const avStr = dt.allowedValues?.length ? dt.allowedValues.join(', ') : '';
+    const typeLabel = dt.inputType === 'number' ? '🔢 מספר' : (avStr ? '📋 רשימה' : '📝 טקסט');
+    return '<div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:8px 12px;margin-bottom:6px">' +
+      '<span style="font-size:1rem">⠿</span>' +
+      '<div style="flex:1"><strong style="font-size:.87rem">' + esc(dt.label) + '</strong>' +
+        '<span style="font-size:.74rem;color:var(--fg3);margin-right:8px">' + typeLabel + '</span>' +
+        (avStr ? '<div style="font-size:.74rem;color:var(--fg3);margin-top:2px">ערכים: ' + esc(avStr) + '</div>' : '') +
+      '</div>' +
+      '<button class="btn-sm btn-danger" onclick="removeSubcatDetailType(' + idx + ')" title="הסר">✕</button>' +
       '</div>';
   }).join('');
 }
 
-function addSubcatDetailType() {
-  const label = prompt('שם השדה (לדוגמא: מידה, צורה, שוליים):');
-  if (!label?.trim()) return;
-  const typeChoice = confirm('האם זהו שדה מספרי?\nלחץ אישור למספר, ביטול לטקסט');
-  const inputType = typeChoice ? 'number' : 'text';
-  const avRaw = prompt('ערכים מותרים (מופרדים בפסיק, השאר ריק לשדה חופשי):');
-  const allowedValues = avRaw?.trim() ? avRaw.split(',').map(v=>v.trim()).filter(Boolean) : null;
+function showAddDetailTypeForm() {
+  document.getElementById('subcat-add-field-form').style.display = '';
+  document.getElementById('new-dt-label').value = '';
+  document.getElementById('new-dt-type').value = 'text';
+  document.getElementById('new-dt-values-wrap').style.display = 'none';
+  document.getElementById('new-dt-values').value = '';
+  document.getElementById('new-dt-label').focus();
+  // הצג/הסתר ערכים כשמשנים סוג
+  document.getElementById('new-dt-type').onchange = function() {
+    document.getElementById('new-dt-values-wrap').style.display = this.value === 'select' ? '' : 'none';
+  };
+}
+
+function confirmAddDetailType() {
+  const label = document.getElementById('new-dt-label').value.trim();
+  if (!label) { alert('נא להזין שם שדה'); return; }
+  const typeVal = document.getElementById('new-dt-type').value;
+  const inputType = typeVal === 'number' ? 'number' : 'text';
+  let allowedValues = null;
+  if (typeVal === 'select') {
+    const avRaw = document.getElementById('new-dt-values').value.trim();
+    if (avRaw) allowedValues = avRaw.split(',').map(v=>v.trim()).filter(Boolean);
+  }
   if (!window._subcatDetailTypes) window._subcatDetailTypes = [];
-  const dt = { label: label.trim(), inputType };
+  const dt = { label, inputType };
   if (allowedValues?.length) dt.allowedValues = allowedValues;
   window._subcatDetailTypes.push(dt);
   renderSubcatDetailTypesList();
+  document.getElementById('subcat-add-field-form').style.display = 'none';
 }
+
+function addSubcatDetailType() { showAddDetailTypeForm(); }
 
 function removeSubcatDetailType(idx) {
   if (!window._subcatDetailTypes) return;
