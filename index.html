@@ -188,14 +188,40 @@ tr:hover td { background: var(--surface2); }
 
 /* ── ADMIN ── */
 .admin-section { margin-bottom: 24px; }
-.user-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.user-row { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .user-row:last-child { border-bottom: none; }
-.user-info { flex: 1; }
+.user-info { flex: 1; min-width: 140px; }
 .user-name { font-weight: 600; font-size: .9rem; }
 .user-email { font-size: .78rem; color: var(--fg3); }
 .role-badge { padding: 2px 10px; border-radius: 20px; font-size: .74rem; font-weight: 700; }
 .role-owner { background: var(--accent-lt); color: var(--accent); }
 .role-user { background: var(--surface2); color: var(--fg3); }
+
+/* ── DASHBOARD SEARCH ── */
+.dash-search-bar { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+.dash-search-bar input, .dash-search-bar select { padding:8px 12px; border:1px solid var(--border); border-radius:var(--rs); background:var(--surface); color:var(--fg); font-size:.88rem; font-family:inherit; }
+.dash-search-bar input { flex:1; min-width:160px; }
+.dash-results { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; margin-bottom:20px; }
+.dash-prod-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:12px 14px; cursor:pointer; transition:box-shadow .15s; }
+.dash-prod-card:hover { box-shadow:0 2px 12px rgba(0,0,0,.1); }
+.dash-prod-card .dpc-name { font-weight:700; font-size:.9rem; margin-bottom:4px; }
+.dash-prod-card .dpc-details { font-size:.76rem; color:var(--fg3); margin-bottom:6px; }
+.dash-prod-card .dpc-stock { font-size:1.1rem; font-weight:800; }
+.dash-prod-card .dpc-stock.ok { color:var(--ok); }
+.dash-prod-card .dpc-stock.err { color:var(--err); }
+.dash-prod-card .dpc-stock.warn { color:var(--warn); }
+
+/* ── DETAILS SECTION LABEL ── */
+.details-section-title {
+  font-size:.78rem; font-weight:700; color:var(--accent); text-transform:uppercase;
+  letter-spacing:.04em; margin:14px 0 8px; padding-bottom:4px;
+  border-bottom:1px solid var(--border);
+}
+
+/* ── PERM CHECKBOXES ── */
+.perm-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:6px; margin-top:8px; }
+.perm-item { display:flex; align-items:center; gap:7px; padding:7px 10px; background:var(--surface2); border-radius:var(--rs); font-size:.84rem; cursor:pointer; }
+.perm-item input[type=checkbox] { accent-color:var(--accent); width:15px; height:15px; }
 </style>
 
 <!-- AUTH SCREEN -->
@@ -245,6 +271,29 @@ tr:hover td { background: var(--surface2); }
     <div id="tab-dashboard" class="panel active">
       <div class="section-title">לוח בקרה</div>
       <div class="tiles" id="dash-tiles"></div>
+      <!-- חיפוש חכם -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-hd">🔍 חיפוש מוצרים מהיר</div>
+        <div class="card-body">
+          <div class="dash-search-bar">
+            <input id="dash-search" placeholder="חיפוש לפי שם או ברקוד..." oninput="renderDashSearch()">
+            <select id="dash-cat-filter" onchange="renderDashSearch()"><option value="">כל הקטגוריות</option></select>
+            <select id="dash-subcat-filter" onchange="renderDashSearch()"><option value="">כל תת-הקטגוריות</option></select>
+            <select id="dash-stock-filter" onchange="renderDashSearch()">
+              <option value="">כל המלאי</option>
+              <option value="instock">במלאי</option>
+              <option value="low">מלאי נמוך (1–5)</option>
+              <option value="zero">אזל מהמלאי</option>
+            </select>
+          </div>
+          <div id="dash-results" class="dash-results"></div>
+        </div>
+      </div>
+      <!-- סיכום לפי קטגוריות -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-hd">📦 מלאי לפי קטגוריות</div>
+        <div class="card-body" id="dash-cat-summary"></div>
+      </div>
       <div id="dash-alerts"></div>
     </div>
 
@@ -339,12 +388,16 @@ tr:hover td { background: var(--surface2); }
     <!-- ADMIN -->
     <div id="tab-admin" class="panel">
       <div class="fbar">
-        <div class="section-title" style="margin:0">ניהול משתמשים</div>
+        <div class="section-title" style="margin:0">ניהול משתמשים והרשאות</div>
         <div style="flex:1"></div>
-        <button class="btn-sm btn-primary" onclick="openInviteModal()">+ הוסף משתמש</button>
+        <button class="btn-sm btn-primary" onclick="openInviteModal()">+ הזמן משתמש</button>
       </div>
-      <div class="card"><div class="card-body">
+      <div class="card" style="margin-bottom:12px"><div class="card-body">
         <div id="users-list"><div class="spinner">טוען...</div></div>
+      </div></div>
+      <!-- הזמנות ממתינות -->
+      <div class="card"><div class="card-hd">הזמנות ממתינות</div><div class="card-body">
+        <div id="invites-list"><div class="spinner">טוען...</div></div>
       </div></div>
     </div>
 
@@ -456,15 +509,54 @@ tr:hover td { background: var(--surface2); }
 </div>
 
 <div class="modal-backdrop" id="modal-invite">
-  <div class="modal">
-    <div class="modal-title">הוספת משתמש חדש</div>
-    <div class="form-group"><label>אימייל *</label><input type="email" id="invite-email"></div>
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title" id="invite-modal-title">הזמנת משתמש חדש</div>
+    <input type="hidden" id="invite-user-id">
+    <div class="form-group"><label>אימייל *</label><input type="email" id="invite-email" placeholder="user@example.com"></div>
     <div class="form-group"><label>שם מלא *</label><input id="invite-name"></div>
-    <div class="form-group"><label>סיסמה זמנית *</label><input type="password" id="invite-pass" placeholder="לפחות 6 תווים"></div>
+    <div class="form-group"><label>תפקיד</label>
+      <select id="invite-role">
+        <option value="user">משתמש רגיל</option>
+        <option value="manager">מנהל</option>
+      </select>
+    </div>
+    <div id="invite-perms-section">
+      <div class="details-section-title">🔐 הרשאות קטגוריות</div>
+      <label style="font-size:.82rem;color:var(--fg2);display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" id="invite-all-cats" onchange="toggleInviteAllCats()" checked> גישה לכל הקטגוריות
+      </label>
+      <div id="invite-cats-grid" class="perm-grid" style="display:none"></div>
+      <div style="margin-top:10px;font-size:.82rem;color:var(--fg2)">הרשאות עריכה:</div>
+      <label style="font-size:.82rem;color:var(--fg2);display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer">
+        <input type="checkbox" id="invite-can-edit" checked> יכול להוסיף/לערוך רשומות
+      </label>
+    </div>
     <div class="auth-err" id="invite-err"></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-invite')">ביטול</button>
-      <button class="btn btn-primary" onclick="createUser()">צור משתמש</button>
+      <button class="btn btn-primary" id="invite-submit-btn" onclick="createInvite()">שלח הזמנה</button>
+    </div>
+    <div id="invite-link-box" style="display:none;margin-top:12px;background:var(--ok-lt);border-radius:var(--rs);padding:12px">
+      <div style="font-size:.82rem;font-weight:700;color:var(--ok);margin-bottom:6px">✓ ההזמנה נוצרה! שלח את הקישור הזה למשתמש:</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="invite-link-url" readonly style="flex:1;font-size:.78rem;padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);direction:ltr">
+        <button class="btn-sm" onclick="copyInviteLink()">העתק</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- מודל הגדרת סיסמה (למוזמן) -->
+<div class="modal-backdrop" id="modal-set-password">
+  <div class="modal">
+    <div class="modal-title">הגדרת סיסמה ראשונית</div>
+    <p style="font-size:.88rem;color:var(--fg2);margin-bottom:16px">ברוך הבא! הגדר סיסמה לחשבון שלך.</p>
+    <div class="form-group"><label>שם מלא</label><input id="sp-name" readonly style="background:var(--surface2)"></div>
+    <div class="form-group"><label>סיסמה חדשה *</label><input type="password" id="sp-pass" placeholder="לפחות 6 תווים"></div>
+    <div class="form-group"><label>אימות סיסמה *</label><input type="password" id="sp-pass2" placeholder="הקלד שוב"></div>
+    <div class="auth-err" id="sp-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="completeInvite()">סיים הרשמה</button>
     </div>
   </div>
 </div>
@@ -646,16 +738,97 @@ function showTab(name) {
 function renderDashboard() {
   const totalProd = products.length;
   const totalStock = products.reduce((s,p) => s + currentStock(p.id), 0);
-  const lowStock = products.filter(p => currentStock(p.id) === 0 && supply.some(s => s.product_id === p.id));
+  const zeroStock = products.filter(p => currentStock(p.id) === 0);
+  const lowStockProds = products.filter(p => { const s = currentStock(p.id); return s > 0 && s <= 5; });
   document.getElementById('dash-tiles').innerHTML =
     '<div class="tile"><div class="tile-label">מוצרים</div><div class="tile-val">' + totalProd + '</div></div>' +
     '<div class="tile"><div class="tile-label">סה"כ מלאי</div><div class="tile-val">' + totalStock.toLocaleString('he-IL') + '</div><div class="tile-sub">יחידות</div></div>' +
-    '<div class="tile ' + (lowStock.length?'warn':'ok') + '"><div class="tile-label">אזל מהמלאי</div><div class="tile-val">' + lowStock.length + '</div></div>' +
+    '<div class="tile ' + (zeroStock.length?'err':'ok') + '"><div class="tile-label">אזל מהמלאי</div><div class="tile-val">' + zeroStock.length + '</div></div>' +
+    '<div class="tile ' + (lowStockProds.length?'warn':'') + '"><div class="tile-label">מלאי נמוך</div><div class="tile-val">' + lowStockProds.length + '</div></div>' +
     '<div class="tile"><div class="tile-label">ספקים</div><div class="tile-val">' + suppliers.length + '</div></div>';
-  const alerts = lowStock.slice(0,6).map(p =>
-    '<div style="padding:10px 14px;background:var(--warn-lt);border-radius:var(--rs);margin-bottom:8px;font-size:.86rem">⚠️ <strong>' + esc(p.name) + '</strong> — אזל מהמלאי</div>'
+
+  // סיכום לפי קטגוריות
+  const catSummaryHtml = categories.map(cat => {
+    const catProds = products.filter(p => p.category_id === cat.id);
+    const catStock = catProds.reduce((s,p) => s + currentStock(p.id), 0);
+    const catZero = catProds.filter(p => currentStock(p.id) === 0).length;
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+      '<div style="flex:1"><strong style="font-size:.9rem">' + esc(cat.name) + '</strong>' +
+      '<span style="font-size:.78rem;color:var(--fg3);margin-right:8px">' + catProds.length + ' מוצרים</span></div>' +
+      '<span style="font-weight:700;font-size:.9rem">' + catStock.toLocaleString('he-IL') + ' יח\'</span>' +
+      (catZero ? '<span class="badge" style="background:var(--err-lt);color:var(--err)">' + catZero + ' אזל</span>' : '') +
+      '</div>';
+  }).join('');
+  document.getElementById('dash-cat-summary').innerHTML = catSummaryHtml || '<div class="empty">אין קטגוריות</div>';
+
+  // אזהרות
+  const alerts = zeroStock.slice(0,8).map(p =>
+    '<div style="padding:9px 14px;background:var(--err-lt);border-radius:var(--rs);margin-bottom:6px;font-size:.86rem">⚠️ <strong>' + esc(p.name) + '</strong>' +
+    detailBadges(p) + ' — אזל מהמלאי</div>'
+  ).join('') + lowStockProds.slice(0,4).map(p =>
+    '<div style="padding:9px 14px;background:var(--warn-lt);border-radius:var(--rs);margin-bottom:6px;font-size:.86rem">⚡ <strong>' + esc(p.name) + '</strong>' +
+    detailBadges(p) + ' — מלאי נמוך: ' + currentStock(p.id) + ' יח\'</div>'
   ).join('');
-  document.getElementById('dash-alerts').innerHTML = alerts || '<div style="color:var(--ok);font-size:.88rem;padding:8px 0">✓ כל המוצרים במלאי</div>';
+  document.getElementById('dash-alerts').innerHTML = alerts || '<div style="color:var(--ok);font-size:.88rem;padding:8px 0">✓ כל המוצרים במלאי תקין</div>';
+
+  // אתחול חיפוש
+  initDashSearch();
+  renderDashSearch();
+}
+
+function initDashSearch() {
+  const catSel = document.getElementById('dash-cat-filter');
+  if (!catSel) return;
+  const curCat = catSel.value;
+  catSel.innerHTML = '<option value="">כל הקטגוריות</option>' + categories.map(c => '<option value="' + c.id + '"' + (c.id===curCat?' selected':'') + '>' + esc(c.name) + '</option>').join('');
+  const subSel = document.getElementById('dash-subcat-filter');
+  const curSub = subSel.value;
+  const subs = curCat ? subcategories.filter(s => s.category_id === curCat) : subcategories;
+  subSel.innerHTML = '<option value="">כל תת-הקטגוריות</option>' + subs.map(s => '<option value="' + s.id + '"' + (s.id===curSub?' selected':'') + '>' + esc(s.name) + '</option>').join('');
+  catSel.onchange = () => { initDashSearch(); renderDashSearch(); };
+}
+
+function renderDashSearch() {
+  const q = (document.getElementById('dash-search')?.value||'').toLowerCase();
+  const catF = document.getElementById('dash-cat-filter')?.value||'';
+  const subF = document.getElementById('dash-subcat-filter')?.value||'';
+  const stockF = document.getElementById('dash-stock-filter')?.value||'';
+  const container = document.getElementById('dash-results');
+  if (!container) return;
+
+  if (!q && !catF && !subF && !stockF) { container.innerHTML = '<div style="color:var(--fg3);font-size:.85rem">הקלד לחיפוש או בחר פילטר...</div>'; return; }
+
+  let list = products.filter(p => {
+    if (catF && p.category_id !== catF) return false;
+    if (subF && p.subcategory_id !== subF) return false;
+    if (q && !(p.name||'').toLowerCase().includes(q) && !(p.barcode||'').toLowerCase().includes(q)) return false;
+    if (stockF) {
+      const s = currentStock(p.id);
+      if (stockF === 'instock' && s <= 0) return false;
+      if (stockF === 'low' && (s <= 0 || s > 5)) return false;
+      if (stockF === 'zero' && s > 0) return false;
+    }
+    return true;
+  });
+
+  if (!list.length) { container.innerHTML = '<div class="empty">לא נמצאו מוצרים</div>'; return; }
+
+  container.innerHTML = list.slice(0,24).map(p => {
+    const stk = currentStock(p.id);
+    const cls = stk === 0 ? 'err' : stk <= 5 ? 'warn' : 'ok';
+    const sub = getSubcat(p.subcategory_id);
+    const cat = getCat(p.category_id);
+    return '<div class="dash-prod-card" onclick="editProduct(\'' + p.id + '\')">' +
+      '<div class="dpc-name">' + esc(p.name) + '</div>' +
+      '<div class="dpc-details">' +
+        (cat ? '<span class="badge badge-cat" style="font-size:.7rem">' + esc(cat.name) + '</span> ' : '') +
+        (sub ? '<span style="font-size:.76rem;color:var(--fg3)">' + esc(sub.name) + '</span>' : '') +
+      '</div>' +
+      '<div style="margin-bottom:4px">' + detailBadges(p) + '</div>' +
+      '<div class="dpc-stock ' + cls + '">' + stk + ' <span style="font-size:.7rem;font-weight:400">יח\'</span></div>' +
+      (p.price ? '<div style="font-size:.78rem;color:var(--fg3)">מחיר: ' + fmtMoney(p.price) + '</div>' : '') +
+      '</div>';
+  }).join('') + (list.length > 24 ? '<div style="color:var(--fg3);font-size:.82rem;padding:8px">ועוד ' + (list.length-24) + ' מוצרים...</div>' : '');
 }
 
 // ══════════════════════════════════════════
@@ -758,8 +931,8 @@ function openProductModal(id) {
   const vSel = document.getElementById('prod-vendor');
   vSel.innerHTML = '<option value="">ללא ספק</option>' + suppliers.map(v => '<option value="' + v.id + '"' + (v.id===p?.supplier_id?' selected':'') + '>' + esc(v.name) + '</option>').join('');
   document.getElementById('modal-product').classList.add('open');
-  // אתחול שדות דינמיים
-  setTimeout(() => onProdSubcatChange(), 0);
+  // אתחול שדות דינמיים — מיידי (ה-DOM כבר עודכן לפני classList.add)
+  onProdSubcatChange();
 }
 function editProduct(id) { openProductModal(id); }
 
@@ -1193,52 +1366,232 @@ async function deleteVendor(id) {
 }
 
 // ══════════════════════════════════════════
-//  ADMIN — ניהול משתמשים (רק owner)
+//  ADMIN — ניהול משתמשים והרשאות
 // ══════════════════════════════════════════
 async function renderAdmin() {
   if (currentDbUser?.role !== 'owner') {
-    document.getElementById('users-list').innerHTML = '<div class="empty">אין הרשאה</div>';
+    document.getElementById('users-list').innerHTML = '<div class="empty">אין הרשאה — רק בעלים יכולים לנהל משתמשים</div>';
     return;
   }
   document.getElementById('users-list').innerHTML = '<div class="spinner">טוען...</div>';
   try {
-    const rows = await sb('users?order=created_at.asc&select=*');
-    document.getElementById('users-list').innerHTML = rows.map(u =>
-      '<div class="user-row">' +
-      '<div class="user-info"><div class="user-name">' + esc(u.full_name||'—') + '</div><div class="user-email">' + esc(u.email) + '</div></div>' +
-      '<span class="role-badge ' + (u.role==='owner'?'role-owner':'role-user') + '">' + (u.role==='owner'?'בעלים':'משתמש') + '</span>' +
-      (u.id !== currentUser.id ? '<button class="btn-sm btn-danger" onclick="removeUser(\'' + u.id + '\')">הסר</button>' : '') +
-      '</div>'
-    ).join('');
+    const rows = await sb('users?owner_id=eq.' + uid() + '&order=created_at.asc&select=*');
+    // הוסף את עצמנו אם לא קיים
+    const allRows = rows.some(r => r.id === currentUser.id) ? rows : [currentDbUser, ...rows];
+    document.getElementById('users-list').innerHTML = allRows.length ? allRows.map(u => {
+      const allowedCats = u.allowed_categories;
+      const catNames = allowedCats
+        ? (Array.isArray(allowedCats) ? allowedCats : []).map(cid => getCat(cid)?.name||'?').join(', ')
+        : 'כל הקטגוריות';
+      const roleLabel = u.role === 'owner' ? 'בעלים' : u.role === 'manager' ? 'מנהל' : 'משתמש';
+      const roleCls = u.role === 'owner' ? 'role-owner' : 'role-user';
+      return '<div class="user-row">' +
+        '<div class="user-info">' +
+          '<div class="user-name">' + esc(u.full_name||'—') + '</div>' +
+          '<div class="user-email">' + esc(u.email) + '</div>' +
+          '<div style="font-size:.74rem;color:var(--fg3);margin-top:2px">📂 ' + esc(catNames) + (u.can_edit === false ? ' | 👁️ צפייה בלבד' : '') + '</div>' +
+        '</div>' +
+        '<span class="role-badge ' + roleCls + '">' + roleLabel + '</span>' +
+        (u.id !== currentUser.id ? '<button class="btn-sm" onclick="openEditPermModal(\'' + u.id + '\')">הרשאות</button> <button class="btn-sm btn-danger" onclick="removeUser(\'' + u.id + '\')">הסר</button>' : '') +
+        '</div>';
+    }).join('') : '<div class="empty">אין משתמשים נוספים</div>';
   } catch(e) { document.getElementById('users-list').innerHTML = '<div class="empty">שגיאה: ' + esc(e.message) + '</div>'; }
+
+  // הזמנות ממתינות
+  try {
+    const invites = await sb('user_invites?owner_id=eq.' + uid() + '&used=eq.false&order=created_at.desc&select=*');
+    document.getElementById('invites-list').innerHTML = invites?.length ? invites.map(inv => {
+      const link = location.origin + '/?invite=' + inv.token;
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">' +
+        '<div style="flex:1"><div style="font-weight:600;font-size:.88rem">' + esc(inv.full_name) + '</div><div style="font-size:.78rem;color:var(--fg3)">' + esc(inv.email) + '</div></div>' +
+        '<button class="btn-sm" onclick="copyText(\'' + link + '\')">העתק קישור</button>' +
+        '<button class="btn-sm btn-danger" onclick="cancelInvite(\'' + inv.id + '\')">בטל</button>' +
+        '</div>';
+    }).join('') : '<div class="empty" style="padding:16px">אין הזמנות ממתינות</div>';
+  } catch(e) { document.getElementById('invites-list').innerHTML = ''; }
+}
+
+function toggleInviteAllCats() {
+  const checked = document.getElementById('invite-all-cats').checked;
+  document.getElementById('invite-cats-grid').style.display = checked ? 'none' : 'grid';
 }
 
 function openInviteModal() {
+  document.getElementById('invite-modal-title').textContent = 'הזמנת משתמש חדש';
+  document.getElementById('invite-user-id').value = '';
   document.getElementById('invite-email').value = '';
   document.getElementById('invite-name').value = '';
-  document.getElementById('invite-pass').value = '';
+  document.getElementById('invite-role').value = 'user';
   document.getElementById('invite-err').textContent = '';
+  document.getElementById('invite-link-box').style.display = 'none';
+  document.getElementById('invite-submit-btn').style.display = '';
+  document.getElementById('invite-all-cats').checked = true;
+  document.getElementById('invite-can-edit').checked = true;
+  // בנה grid קטגוריות
+  document.getElementById('invite-cats-grid').innerHTML = categories.map(c =>
+    '<label class="perm-item"><input type="checkbox" data-cat-id="' + c.id + '" checked> ' + esc(c.name) + '</label>'
+  ).join('');
+  document.getElementById('invite-cats-grid').style.display = 'none';
+  document.getElementById('invite-email').disabled = false;
   document.getElementById('modal-invite').classList.add('open');
 }
 
-async function createUser() {
-  const email = document.getElementById('invite-email').value.trim();
-  const name = document.getElementById('invite-name').value.trim();
-  const pass = document.getElementById('invite-pass').value;
+function openEditPermModal(userId) {
+  const u = document.querySelector('[data-uid="' + userId + '"]') || null;
+  // מצא את המשתמש מה-DOM
+  document.getElementById('invite-modal-title').textContent = 'עריכת הרשאות';
+  document.getElementById('invite-user-id').value = userId;
   document.getElementById('invite-err').textContent = '';
-  if (!email || !name || !pass) { document.getElementById('invite-err').textContent = 'נא למלא את כל השדות'; return; }
-  if (pass.length < 6) { document.getElementById('invite-err').textContent = 'סיסמה חייבת להיות לפחות 6 תווים'; return; }
+  document.getElementById('invite-link-box').style.display = 'none';
+  document.getElementById('invite-submit-btn').textContent = 'שמור הרשאות';
+  document.getElementById('invite-submit-btn').onclick = saveUserPerms;
+  // נסה לטעון נתוני משתמש
+  sb('users?id=eq.' + userId + '&select=*').then(rows => {
+    const user = rows?.[0];
+    if (!user) return;
+    document.getElementById('invite-email').value = user.email;
+    document.getElementById('invite-email').disabled = true;
+    document.getElementById('invite-name').value = user.full_name || '';
+    document.getElementById('invite-role').value = user.role || 'user';
+    document.getElementById('invite-can-edit').checked = user.can_edit !== false;
+    const allowedCats = user.allowed_categories;
+    const hasAll = !allowedCats || (Array.isArray(allowedCats) && allowedCats.length === 0);
+    document.getElementById('invite-all-cats').checked = hasAll;
+    document.getElementById('invite-cats-grid').innerHTML = categories.map(c =>
+      '<label class="perm-item"><input type="checkbox" data-cat-id="' + c.id + '"' +
+      (hasAll || (allowedCats||[]).includes(c.id) ? ' checked' : '') + '> ' + esc(c.name) + '</label>'
+    ).join('');
+    document.getElementById('invite-cats-grid').style.display = hasAll ? 'none' : 'grid';
+  });
+  document.getElementById('modal-invite').classList.add('open');
+}
+
+async function saveUserPerms() {
+  const userId = document.getElementById('invite-user-id').value;
+  const name = document.getElementById('invite-name').value.trim();
+  const role = document.getElementById('invite-role').value;
+  const canEdit = document.getElementById('invite-can-edit').checked;
+  const allCats = document.getElementById('invite-all-cats').checked;
+  let allowedCats = null;
+  if (!allCats) {
+    allowedCats = [...document.querySelectorAll('#invite-cats-grid input[type=checkbox]:checked')].map(el => el.getAttribute('data-cat-id'));
+  }
   try {
-    // Create auth user via admin endpoint (requires service role — here we use signup)
-    const authData = await sbAuth('signup', { email, password: pass });
-    // Insert user record
-    await sb('users', { method: 'POST', body: { id: authData.user.id, email, full_name: name, role: 'user' } });
-    document.getElementById('invite-err').textContent = 'המשתמש נוצר בהצלחה!';
-    document.getElementById('invite-err').style.color = 'var(--ok)';
-    setTimeout(() => { closeModal('modal-invite'); renderAdmin(); }, 1500);
+    await sb('users?id=eq.' + userId, {
+      method: 'PATCH',
+      body: { full_name: name, role, can_edit: canEdit, allowed_categories: allowedCats },
+      prefer: 'return=minimal'
+    });
+    closeModal('modal-invite');
+    renderAdmin();
   } catch(e) {
     document.getElementById('invite-err').textContent = 'שגיאה: ' + e.message;
     document.getElementById('invite-err').style.color = 'var(--err)';
+  }
+}
+
+async function createInvite() {
+  const email = document.getElementById('invite-email').value.trim();
+  const name = document.getElementById('invite-name').value.trim();
+  const role = document.getElementById('invite-role').value;
+  const canEdit = document.getElementById('invite-can-edit').checked;
+  const allCats = document.getElementById('invite-all-cats').checked;
+  document.getElementById('invite-err').textContent = '';
+  if (!email || !name) { document.getElementById('invite-err').textContent = 'נא למלא אימייל ושם'; return; }
+  let allowedCats = null;
+  if (!allCats) {
+    allowedCats = [...document.querySelectorAll('#invite-cats-grid input[type=checkbox]:checked')].map(el => el.getAttribute('data-cat-id'));
+  }
+  try {
+    const rows = await sb('user_invites', {
+      method: 'POST',
+      body: { owner_id: uid(), email, full_name: name },
+    });
+    const invite = rows?.[0];
+    if (!invite) throw new Error('לא נוצרה הזמנה');
+    // שמור הרשאות כ-"pending" ב-metadata
+    window._pendingInvitePerms = window._pendingInvitePerms || {};
+    window._pendingInvitePerms[invite.token] = { role, canEdit, allowedCats };
+
+    const link = location.origin + '/?invite=' + invite.token;
+    document.getElementById('invite-link-url').value = link;
+    document.getElementById('invite-link-box').style.display = '';
+    document.getElementById('invite-submit-btn').style.display = 'none';
+    renderAdmin();
+  } catch(e) {
+    document.getElementById('invite-err').textContent = 'שגיאה: ' + e.message;
+    document.getElementById('invite-err').style.color = 'var(--err)';
+  }
+}
+
+async function cancelInvite(id) {
+  if (!confirm('לבטל הזמנה זו?')) return;
+  await sb('user_invites?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  renderAdmin();
+}
+
+function copyInviteLink() {
+  const url = document.getElementById('invite-link-url').value;
+  copyText(url);
+}
+
+function copyText(text) {
+  navigator.clipboard?.writeText(text).then(() => alert('הקישור הועתק!')).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    alert('הקישור הועתק!');
+  });
+}
+
+// בדיקת הזמנה בכניסה לאתר
+async function checkInviteToken() {
+  const params = new URLSearchParams(location.search);
+  const token = params.get('invite');
+  if (!token) return;
+  try {
+    const rows = await sb('user_invites?token=eq.' + token + '&used=eq.false&select=*');
+    const invite = rows?.[0];
+    if (!invite) { alert('קישור הזמנה לא תקף או פג תוקף'); return; }
+    // הצג מסך הגדרת סיסמה
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('sp-name').value = invite.full_name;
+    window._activeInvite = invite;
+    document.getElementById('modal-set-password').classList.add('open');
+  } catch(e) {}
+}
+
+async function completeInvite() {
+  const pass = document.getElementById('sp-pass').value;
+  const pass2 = document.getElementById('sp-pass2').value;
+  document.getElementById('sp-err').textContent = '';
+  if (!pass || pass.length < 6) { document.getElementById('sp-err').textContent = 'סיסמה חייבת להיות לפחות 6 תווים'; return; }
+  if (pass !== pass2) { document.getElementById('sp-err').textContent = 'הסיסמאות אינן תואמות'; return; }
+  const invite = window._activeInvite;
+  if (!invite) return;
+  try {
+    // צור משתמש
+    const authData = await sbAuth('signup', { email: invite.email, password: pass });
+    const userId = authData.user?.id;
+    if (!userId) throw new Error('שגיאה ביצירת חשבון');
+    // שמור record עם הרשאות
+    const perms = window._pendingInvitePerms?.[invite.token] || {};
+    await sb('users', { method: 'POST', body: {
+      id: userId, email: invite.email, full_name: invite.full_name,
+      role: perms.role || 'user', owner_id: invite.owner_id,
+      can_edit: perms.canEdit !== false,
+      allowed_categories: perms.allowedCats || null
+    }});
+    // סמן הזמנה כנוצלה
+    await sb('user_invites?id=eq.' + invite.id, { method: 'PATCH', body: { used: true }, prefer: 'return=minimal' });
+    // כניסה אוטומטית
+    const loginData = await sbAuth('token?grant_type=password', { email: invite.email, password: pass });
+    currentSession = loginData;
+    closeModal('modal-set-password');
+    document.getElementById('auth-screen').style.display = 'flex';
+    history.replaceState({}, '', '/');
+    await onSignIn();
+  } catch(e) {
+    document.getElementById('sp-err').textContent = 'שגיאה: ' + e.message;
   }
 }
 
@@ -1265,4 +1618,11 @@ document.addEventListener('keydown', e => {
 
 // Enter to login
 document.getElementById('auth-pass').addEventListener('keydown', e => { if (e.key === 'Enter') signIn(); });
+
+// בדיקת טוקן הזמנה בטעינת הדף
+(async () => {
+  if (location.search.includes('invite=')) {
+    await checkInviteToken();
+  }
+})();
 </script>
