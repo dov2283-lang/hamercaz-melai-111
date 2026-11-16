@@ -360,6 +360,8 @@ tr:hover td { background: var(--surface2); }
     <div class="form-group"><label>ברקוד</label><input id="prod-barcode"></div>
     <div class="form-group"><label>קטגוריה</label><select id="prod-cat"></select></div>
     <div class="form-group"><label>תת-קטגוריה</label><select id="prod-subcat"></select></div>
+    <!-- שדות פרטים דינמיים לפי תת-קטגוריה -->
+    <div id="prod-details-fields"></div>
     <div class="form-group"><label>ספק</label><select id="prod-vendor"></select></div>
     <div class="form-group"><label>מחיר</label><input type="number" id="prod-price" step="0.01"></div>
     <div class="form-group"><label>הערות</label><textarea id="prod-notes" rows="2"></textarea></div>
@@ -415,11 +417,16 @@ tr:hover td { background: var(--surface2); }
 </div>
 
 <div class="modal-backdrop" id="modal-subcat">
-  <div class="modal">
+  <div class="modal" style="max-width:560px">
     <div class="modal-title" id="subcat-modal-title">תת-קטגוריה חדשה</div>
     <input type="hidden" id="subcat-id">
     <input type="hidden" id="subcat-cat-id">
     <div class="form-group"><label>שם *</label><input id="subcat-name"></div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:.8rem;font-weight:700;color:var(--fg2);margin-bottom:8px">פרטים מותאמים אישית (שדות ייחודיים למוצרים בתת-קטגוריה זו)</div>
+      <div id="subcat-detail-types-list"></div>
+      <button class="btn-sm" style="margin-top:8px" onclick="addSubcatDetailType()">+ הוסף שדה פרט</button>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-subcat')">ביטול</button>
       <button class="btn btn-primary" onclick="saveSubcat()">שמור</button>
@@ -654,6 +661,28 @@ function renderDashboard() {
 // ══════════════════════════════════════════
 //  PRODUCTS
 // ══════════════════════════════════════════
+
+// פונקציית עזר: קבל detailTypes של תת-קטגוריה
+function getDetailTypes(subcatId) {
+  if (!subcatId) return [];
+  const sub = getSubcat(subcatId);
+  if (!sub) return [];
+  try {
+    const dt = sub.detail_types;
+    if (!dt) return [];
+    return Array.isArray(dt) ? dt : (typeof dt === 'object' ? Object.values(dt) : []);
+  } catch(e) { return []; }
+}
+
+// תצוגת פרטי מוצר כ-badges
+function detailBadges(product) {
+  const details = product.details;
+  if (!details || typeof details !== 'object') return '';
+  return Object.entries(details).map(([k,v]) =>
+    '<span style="display:inline-block;background:var(--surface2);border-radius:4px;padding:1px 6px;font-size:.74rem;margin:1px">' + esc(k) + ': ' + esc(String(v)) + '</span>'
+  ).join('');
+}
+
 function renderProducts() {
   const q = (document.getElementById('prod-search')?.value||'').toLowerCase();
   const catF = document.getElementById('prod-cat-filter')?.value||'';
@@ -664,18 +693,46 @@ function renderProducts() {
     (!catF || p.category_id === catF) &&
     (!q || (p.name||'').toLowerCase().includes(q) || (p.barcode||'').toLowerCase().includes(q))
   );
-  document.getElementById('prod-thead').innerHTML = '<tr><th>שם</th><th>ברקוד</th><th>קטגוריה</th><th>מחיר</th><th>מלאי</th><th>פעולות</th></tr>';
+  document.getElementById('prod-thead').innerHTML = '<tr><th>שם</th><th>ברקוד</th><th>קטגוריה</th><th>תת-קטגוריה</th><th>פרטים</th><th>מחיר</th><th>מלאי</th><th>פעולות</th></tr>';
   document.getElementById('prod-tbody').innerHTML = list.length ? list.map(p => {
     const stk = currentStock(p.id);
+    const sub = getSubcat(p.subcategory_id);
     return '<tr>' +
       '<td><strong>' + esc(p.name) + '</strong></td>' +
       '<td style="font-size:.8rem;direction:ltr">' + esc(p.barcode||'—') + '</td>' +
       '<td>' + catBadge(p.category_id) + '</td>' +
+      '<td style="font-size:.8rem;color:var(--fg2)">' + esc(sub?.name||'—') + '</td>' +
+      '<td>' + detailBadges(p) + '</td>' +
       '<td class="tbl-num">' + fmtMoney(p.price) + '</td>' +
       '<td class="tbl-num" style="font-weight:700;color:' + (stk===0?'var(--err)':'var(--ok)') + '">' + stk + '</td>' +
       '<td><button class="btn-sm" onclick="editProduct(\'' + p.id + '\')">עריכה</button> <button class="btn-sm btn-danger" onclick="deleteProduct(\'' + p.id + '\')">מחק</button></td>' +
       '</tr>';
-  }).join('') : '<tr><td colspan="6"><div class="empty">אין מוצרים</div></td></tr>';
+  }).join('') : '<tr><td colspan="8"><div class="empty">אין מוצרים</div></td></tr>';
+}
+
+// עדכון שדות דינמיים כשמשנים תת-קטגוריה
+function onProdSubcatChange() {
+  const subcatId = document.getElementById('prod-subcat').value;
+  const detailTypes = getDetailTypes(subcatId);
+  const container = document.getElementById('prod-details-fields');
+  if (!container) return;
+  if (!detailTypes.length) { container.innerHTML = ''; return; }
+
+  // קרא פרטים קיימים של המוצר הנוכחי
+  const prodId = document.getElementById('prod-id').value;
+  const existing = prodId ? (getProduct(prodId)?.details || {}) : {};
+
+  container.innerHTML = detailTypes.map(dt => {
+    const val = existing[dt.label] !== undefined ? existing[dt.label] : '';
+    if (dt.inputType === 'number') {
+      return '<div class="form-group"><label>' + esc(dt.label) + '</label><input type="number" data-detail="' + esc(dt.label) + '" value="' + esc(String(val)) + '" step="any"></div>';
+    } else if (dt.allowedValues && dt.allowedValues.length) {
+      const opts = dt.allowedValues.map(v => '<option value="' + esc(String(v)) + '"' + (String(v)===String(val)?' selected':'') + '>' + esc(String(v)) + '</option>').join('');
+      return '<div class="form-group"><label>' + esc(dt.label) + '</label><select data-detail="' + esc(dt.label) + '"><option value="">—</option>' + opts + '</select></div>';
+    } else {
+      return '<div class="form-group"><label>' + esc(dt.label) + '</label><input type="text" data-detail="' + esc(dt.label) + '" value="' + esc(String(val)) + '"></div>';
+    }
+  }).join('');
 }
 
 function openProductModal(id) {
@@ -694,10 +751,15 @@ function openProductModal(id) {
   catSel.onchange = () => {
     const ss = subcategories.filter(s => s.category_id === catSel.value);
     subSel.innerHTML = '<option value="">ללא תת-קטגוריה</option>' + ss.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
+    subSel.value = '';
+    onProdSubcatChange();
   };
+  subSel.onchange = () => onProdSubcatChange();
   const vSel = document.getElementById('prod-vendor');
   vSel.innerHTML = '<option value="">ללא ספק</option>' + suppliers.map(v => '<option value="' + v.id + '"' + (v.id===p?.supplier_id?' selected':'') + '>' + esc(v.name) + '</option>').join('');
   document.getElementById('modal-product').classList.add('open');
+  // אתחול שדות דינמיים
+  setTimeout(() => onProdSubcatChange(), 0);
 }
 function editProduct(id) { openProductModal(id); }
 
@@ -705,6 +767,18 @@ async function saveProduct() {
   const id = document.getElementById('prod-id').value;
   const name = document.getElementById('prod-name').value.trim();
   if (!name) { alert('נא להזין שם מוצר'); return; }
+
+  // איסוף פרטים דינמיים
+  const detailFields = document.querySelectorAll('#prod-details-fields [data-detail]');
+  const details = {};
+  detailFields.forEach(el => {
+    const key = el.getAttribute('data-detail');
+    const val = el.value.trim();
+    if (val !== '') {
+      details[key] = el.type === 'number' ? (parseFloat(val) || val) : val;
+    }
+  });
+
   const data = {
     name, owner_id: uid(),
     barcode: document.getElementById('prod-barcode').value.trim() || null,
@@ -712,7 +786,8 @@ async function saveProduct() {
     subcategory_id: document.getElementById('prod-subcat').value || null,
     supplier_id: document.getElementById('prod-vendor').value || null,
     price: parseFloat(document.getElementById('prod-price').value) || 0,
-    notes: document.getElementById('prod-notes').value.trim() || null
+    notes: document.getElementById('prod-notes').value.trim() || null,
+    details: Object.keys(details).length ? details : null
   };
   try {
     if (id) {
@@ -755,7 +830,9 @@ function renderSupply() {
   });
   document.getElementById('sup-tbody').innerHTML = list.length ? list.map(s => {
     const p = getProduct(s.product_id), v = getVendor(s.supplier_id);
-    return '<tr><td>' + fmtDate(s.date) + '</td><td><strong>' + esc(p?.name||'—') + '</strong></td><td>' + catBadge(p?.category_id) + '</td>' +
+    return '<tr><td>' + fmtDate(s.date) + '</td>' +
+      '<td><strong>' + esc(p?.name||'—') + '</strong>' + (p ? '<div style="margin-top:2px">' + detailBadges(p) + '</div>' : '') + '</td>' +
+      '<td>' + catBadge(p?.category_id) + '</td>' +
       '<td class="tbl-num">' + s.qty + '</td><td class="tbl-num">' + fmtMoney(s.price) + '</td>' +
       '<td style="font-size:.8rem">' + esc(v?.name||'—') + '</td><td style="font-size:.8rem;color:var(--fg3)">' + esc(s.notes||'—') + '</td>' +
       '<td><button class="btn-sm" onclick="editSupply(\'' + s.id + '\')">עריכה</button> <button class="btn-sm btn-danger" onclick="deleteSupply(\'' + s.id + '\')">מחק</button></td></tr>';
@@ -822,7 +899,9 @@ function renderCounts() {
   let list = counts.filter(c => !df || c.date === df);
   document.getElementById('cnt-tbody').innerHTML = list.length ? list.map(c => {
     const p = getProduct(c.product_id);
-    return '<tr><td>' + fmtDate(c.date) + '</td><td><strong>' + esc(p?.name||'—') + '</strong></td><td>' + catBadge(p?.category_id) + '</td>' +
+    return '<tr><td>' + fmtDate(c.date) + '</td>' +
+      '<td><strong>' + esc(p?.name||'—') + '</strong>' + (p ? '<div style="margin-top:2px">' + detailBadges(p) + '</div>' : '') + '</td>' +
+      '<td>' + catBadge(p?.category_id) + '</td>' +
       '<td class="tbl-num" style="font-weight:700">' + c.count + '</td>' +
       '<td style="font-size:.8rem;color:var(--fg3)">' + esc(c.notes||'—') + '</td>' +
       '<td><button class="btn-sm" onclick="editCount(\'' + c.id + '\')">עריכה</button> <button class="btn-sm btn-danger" onclick="deleteCount(\'' + c.id + '\')">מחק</button></td></tr>';
@@ -919,8 +998,14 @@ function renderCategories() {
     if (subs.length) {
       html += '<div class="card-body" style="padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px">';
       subs.forEach(s => {
+        const dts = (() => {
+          try {
+            const dt = s.detail_types;
+            return dt ? (Array.isArray(dt) ? dt : Object.values(dt)) : [];
+          } catch(e) { return []; }
+        })();
         html += '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);padding:4px 10px;border-radius:20px;font-size:.82rem">' +
-          esc(s.name) +
+          '<span>' + esc(s.name) + (dts.length ? ' <span style="color:var(--accent);font-size:.7rem">[' + dts.map(d=>esc(d.label)).join(', ') + ']</span>' : '') + '</span>' +
           '<button onclick="editSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--fg3);font-size:.8rem">✏️</button>' +
           '<button onclick="deleteSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--err);font-size:.8rem">✕</button>' +
           '</span>';
@@ -966,12 +1051,54 @@ async function deleteCat(id) {
   renderCategories();
 }
 
+function renderSubcatDetailTypesList() {
+  const list = document.getElementById('subcat-detail-types-list');
+  if (!list) return;
+  const items = window._subcatDetailTypes || [];
+  if (!items.length) { list.innerHTML = '<div style="color:var(--fg3);font-size:.82rem;padding:6px 0">אין שדות מוגדרים</div>'; return; }
+  list.innerHTML = items.map((dt, idx) => {
+    const avStr = dt.allowedValues ? dt.allowedValues.join(', ') : '';
+    return '<div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:var(--rs);padding:7px 10px;margin-bottom:6px;flex-wrap:wrap">' +
+      '<strong style="font-size:.85rem;flex:1">' + esc(dt.label) + '</strong>' +
+      '<span style="font-size:.76rem;color:var(--fg3)">' + (dt.inputType==='number'?'מספר':'טקסט') + '</span>' +
+      (avStr ? '<span style="font-size:.76rem;color:var(--fg3)">ערכים: ' + esc(avStr) + '</span>' : '') +
+      '<button class="btn-sm btn-danger" onclick="removeSubcatDetailType(' + idx + ')">✕</button>' +
+      '</div>';
+  }).join('');
+}
+
+function addSubcatDetailType() {
+  const label = prompt('שם השדה (לדוגמא: מידה, צורה, שוליים):');
+  if (!label?.trim()) return;
+  const typeChoice = confirm('האם זהו שדה מספרי?\nלחץ אישור למספר, ביטול לטקסט');
+  const inputType = typeChoice ? 'number' : 'text';
+  const avRaw = prompt('ערכים מותרים (מופרדים בפסיק, השאר ריק לשדה חופשי):');
+  const allowedValues = avRaw?.trim() ? avRaw.split(',').map(v=>v.trim()).filter(Boolean) : null;
+  if (!window._subcatDetailTypes) window._subcatDetailTypes = [];
+  const dt = { label: label.trim(), inputType };
+  if (allowedValues?.length) dt.allowedValues = allowedValues;
+  window._subcatDetailTypes.push(dt);
+  renderSubcatDetailTypesList();
+}
+
+function removeSubcatDetailType(idx) {
+  if (!window._subcatDetailTypes) return;
+  window._subcatDetailTypes.splice(idx, 1);
+  renderSubcatDetailTypesList();
+}
+
 function openSubcatModal(catId, id) {
   const s = id ? getSubcat(id) : null;
   document.getElementById('subcat-modal-title').textContent = s ? 'עריכת תת-קטגוריה' : 'תת-קטגוריה חדשה';
   document.getElementById('subcat-id').value = id || '';
   document.getElementById('subcat-cat-id').value = catId || s?.category_id || '';
   document.getElementById('subcat-name').value = s?.name || '';
+  // טען detailTypes קיימים
+  try {
+    const dt = s?.detail_types;
+    window._subcatDetailTypes = dt ? (Array.isArray(dt) ? [...dt] : Object.values(dt)) : [];
+  } catch(e) { window._subcatDetailTypes = []; }
+  renderSubcatDetailTypesList();
   document.getElementById('modal-subcat').classList.add('open');
 }
 function editSubcat(id) {
@@ -983,7 +1110,13 @@ async function saveSubcat() {
   const id = document.getElementById('subcat-id').value;
   const name = document.getElementById('subcat-name').value.trim();
   if (!name) { alert('נא להזין שם'); return; }
-  const data = { name, owner_id: uid(), category_id: document.getElementById('subcat-cat-id').value };
+  const detailTypes = window._subcatDetailTypes || [];
+  const data = {
+    name,
+    owner_id: uid(),
+    category_id: document.getElementById('subcat-cat-id').value,
+    detail_types: detailTypes.length ? detailTypes : null
+  };
   try {
     if (id) {
       await sb('subcategories?id=eq.' + id, { method: 'PATCH', body: data, prefer: 'return=minimal' });
