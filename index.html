@@ -444,6 +444,7 @@ tr:hover td { background: var(--surface2); }
     <input type="hidden" id="sup-id">
     <div class="form-group"><label>תאריך *</label><input type="date" id="sup-date"></div>
     <div class="form-group"><label>מוצר *</label><select id="sup-product"></select></div>
+    <div id="sup-details-fields"></div>
     <div class="form-group"><label>כמות *</label><input type="number" id="sup-qty" min="0"></div>
     <div class="form-group"><label>מחיר ליחידה</label><input type="number" id="sup-price" step="0.01"></div>
     <div class="form-group"><label>ספק</label><select id="sup-vendor"></select></div>
@@ -461,6 +462,7 @@ tr:hover td { background: var(--surface2); }
     <input type="hidden" id="cnt-id">
     <div class="form-group"><label>תאריך *</label><input type="date" id="cnt-date"></div>
     <div class="form-group"><label>מוצר *</label><select id="cnt-product"></select></div>
+    <div id="cnt-details-fields"></div>
     <div class="form-group"><label>כמות *</label><input type="number" id="cnt-count" min="0"></div>
     <div class="form-group"><label>הערות</label><textarea id="cnt-notes" rows="2"></textarea></div>
     <div class="modal-actions">
@@ -1117,14 +1119,52 @@ function openSupplyModal(id) {
   document.getElementById('sup-qty').value = s?.qty || '';
   document.getElementById('sup-price').value = s?.price || '';
   document.getElementById('sup-notes').value = s?.notes || '';
-  document.getElementById('sup-product').innerHTML = '<option value="">בחר מוצר...</option>' + products.map(p => '<option value="' + p.id + '"' + (p.id===s?.product_id?' selected':'') + '>' + esc(p.name) + '</option>').join('');
+  const supProdSel = document.getElementById('sup-product');
+  supProdSel.innerHTML = '<option value="">בחר מוצר...</option>' + products.map(p => '<option value="' + p.id + '"' + (p.id===s?.product_id?' selected':'') + '>' + esc(p.name) + '</option>').join('');
+  supProdSel.value = s?.product_id || '';
+  supProdSel.onchange = () => onSupProductChange();
   document.getElementById('sup-vendor').innerHTML = '<option value="">ללא ספק</option>' + suppliers.map(v => '<option value="' + v.id + '"' + (v.id===s?.supplier_id?' selected':'') + '>' + esc(v.name) + '</option>').join('');
+  onSupProductChange(s);
   document.getElementById('modal-supply').classList.add('open');
+}
+
+function onSupProductChange(existingSupply) {
+  const prodId = document.getElementById('sup-product')?.value;
+  const container = document.getElementById('sup-details-fields');
+  if (!container) return;
+  const prod = getProduct(prodId);
+  if (!prod) { container.innerHTML = ''; return; }
+  const detailTypes = getDetailTypes(prod.subcategory_id);
+  if (!detailTypes.length) { container.innerHTML = ''; return; }
+  const existing = existingSupply?.details || prod.details || {};
+  const subcat = getSubcat(prod.subcategory_id);
+  container.innerHTML =
+    '<div class="details-section-title">📋 פרטים — ' + esc(subcat?.name||prod.name||'') + '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">' +
+    detailTypes.map(dt => {
+      const val = existing[dt.label] !== undefined ? existing[dt.label] : '';
+      if (dt.inputType === 'number') {
+        return '<div class="form-group" style="margin:0"><label>' + esc(dt.label) + '</label><input type="number" data-detail="' + esc(dt.label) + '" value="' + esc(String(val)) + '" step="any"></div>';
+      } else if (dt.allowedValues && dt.allowedValues.length) {
+        const opts = dt.allowedValues.map(v => '<option value="' + esc(String(v)) + '"' + (String(v)===String(val)?' selected':'') + '>' + esc(String(v)) + '</option>').join('');
+        return '<div class="form-group" style="margin:0"><label>' + esc(dt.label) + '</label><select data-detail="' + esc(dt.label) + '"><option value="">—</option>' + opts + '</select></div>';
+      } else {
+        return '<div class="form-group" style="margin:0"><label>' + esc(dt.label) + '</label><input type="text" data-detail="' + esc(dt.label) + '" value="' + esc(String(val)) + '"></div>';
+      }
+    }).join('') +
+    '</div>';
 }
 function editSupply(id) { openSupplyModal(id); }
 
 async function saveSupply() {
   const id = document.getElementById('sup-id').value;
+  const supDetailFields = document.querySelectorAll('#sup-details-fields [data-detail]');
+  const supDetails = {};
+  supDetailFields.forEach(el => {
+    const key = el.getAttribute('data-detail');
+    const val = el.value.trim();
+    if (val !== '') supDetails[key] = el.type === 'number' ? (parseFloat(val) || val) : val;
+  });
   const data = {
     owner_id: uid(),
     date: document.getElementById('sup-date').value,
@@ -1132,7 +1172,8 @@ async function saveSupply() {
     qty: parseFloat(document.getElementById('sup-qty').value) || 0,
     price: parseFloat(document.getElementById('sup-price').value) || 0,
     supplier_id: document.getElementById('sup-vendor').value || null,
-    notes: document.getElementById('sup-notes').value.trim() || null
+    notes: document.getElementById('sup-notes').value.trim() || null,
+    ...(Object.keys(supDetails).length ? { details: supDetails } : {})
   };
   if (!data.product_id || !data.date) { alert('נא לבחור תאריך ומוצר'); return; }
   try {
@@ -1185,19 +1226,60 @@ function openCountModal(id) {
   document.getElementById('cnt-date').value = c?.date || today();
   document.getElementById('cnt-count').value = c?.count || '';
   document.getElementById('cnt-notes').value = c?.notes || '';
-  document.getElementById('cnt-product').innerHTML = '<option value="">בחר מוצר...</option>' + products.map(p => '<option value="' + p.id + '"' + (p.id===c?.product_id?' selected':'') + '>' + esc(p.name) + '</option>').join('');
+  const prodSel = document.getElementById('cnt-product');
+  prodSel.innerHTML = '<option value="">בחר מוצר...</option>' + products.map(p => '<option value="' + p.id + '"' + (p.id===c?.product_id?' selected':'') + '>' + esc(p.name) + '</option>').join('');
+  prodSel.value = c?.product_id || '';
+  prodSel.onchange = () => onCntProductChange();
+  onCntProductChange(c);
   document.getElementById('modal-count').classList.add('open');
+}
+
+function onCntProductChange(existingCount) {
+  const prodId = document.getElementById('cnt-product')?.value;
+  const container = document.getElementById('cnt-details-fields');
+  if (!container) return;
+  const prod = getProduct(prodId);
+  if (!prod) { container.innerHTML = ''; return; }
+  const detailTypes = getDetailTypes(prod.subcategory_id);
+  if (!detailTypes.length) { container.innerHTML = ''; return; }
+  // קרא פרטים קיימים — מהספירה (אם עריכה) או מהמוצר
+  const existing = existingCount?.details || prod.details || {};
+  const subcat = getSubcat(prod.subcategory_id);
+  container.innerHTML =
+    '<div class="details-section-title">📋 פרטים — ' + esc(subcat?.name||prod.name||'') + '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">' +
+    detailTypes.map(dt => {
+      const val = existing[dt.label] !== undefined ? existing[dt.label] : '';
+      if (dt.inputType === 'number') {
+        return '<div class="form-group" style="margin:0"><label>' + esc(dt.label) + '</label><input type="number" data-detail="' + esc(dt.label) + '" value="' + esc(String(val)) + '" step="any"></div>';
+      } else if (dt.allowedValues && dt.allowedValues.length) {
+        const opts = dt.allowedValues.map(v => '<option value="' + esc(String(v)) + '"' + (String(v)===String(val)?' selected':'') + '>' + esc(String(v)) + '</option>').join('');
+        return '<div class="form-group" style="margin:0"><label>' + esc(dt.label) + '</label><select data-detail="' + esc(dt.label) + '"><option value="">—</option>' + opts + '</select></div>';
+      } else {
+        return '<div class="form-group" style="margin:0"><label>' + esc(dt.label) + '</label><input type="text" data-detail="' + esc(dt.label) + '" value="' + esc(String(val)) + '"></div>';
+      }
+    }).join('') +
+    '</div>';
 }
 function editCount(id) { openCountModal(id); }
 
 async function saveCount() {
   const id = document.getElementById('cnt-id').value;
+  // איסוף פרטים דינמיים של ספירה
+  const cntDetailFields = document.querySelectorAll('#cnt-details-fields [data-detail]');
+  const cntDetails = {};
+  cntDetailFields.forEach(el => {
+    const key = el.getAttribute('data-detail');
+    const val = el.value.trim();
+    if (val !== '') cntDetails[key] = el.type === 'number' ? (parseFloat(val) || val) : val;
+  });
   const data = {
     owner_id: uid(),
     date: document.getElementById('cnt-date').value,
     product_id: document.getElementById('cnt-product').value || null,
     count: parseFloat(document.getElementById('cnt-count').value) || 0,
-    notes: document.getElementById('cnt-notes').value.trim() || null
+    notes: document.getElementById('cnt-notes').value.trim() || null,
+    ...(Object.keys(cntDetails).length ? { details: cntDetails } : {})
   };
   if (!data.product_id || !data.date) { alert('נא לבחור תאריך ומוצר'); return; }
   try {
