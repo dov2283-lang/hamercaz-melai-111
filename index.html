@@ -765,6 +765,21 @@ function showLogin() {
   document.getElementById('reset-form').style.display = 'none';
   document.getElementById('auth-form').style.display = '';
 }
+async function sendPasswordReset(email) {
+  try {
+    await fetch(SUPABASE_URL + '/auth/v1/recover', {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    document.getElementById('sp-err').innerHTML = '';
+    document.getElementById('sp-err').style.color = 'var(--ok)';
+    document.getElementById('sp-err').textContent = '✓ נשלח קישור לאיפוס סיסמה לכתובת ' + email + '. פתח את המייל ולחץ על הקישור, ואז חזור לכניסה.';
+  } catch(e) {
+    document.getElementById('sp-err').textContent = 'שגיאה בשליחה: ' + e.message;
+  }
+}
+
 async function sendReset() {
   const email = document.getElementById('reset-email').value.trim();
   try {
@@ -2224,31 +2239,48 @@ async function completeInvite() {
   const btn = document.querySelector('#modal-set-password .btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = 'מייצר חשבון...'; }
   try {
-    // נסה login ראשון — אולי החשבון כבר קיים (ניסיון קודם)
     let userId = null;
     let loginData = null;
+
+    // שלב 1: נסה login — אולי החשבון כבר קיים מניסיון קודם
     try {
       loginData = await sbAuth('token?grant_type=password', { email: invite.email, password: pass });
       userId = loginData?.user?.id;
       currentSession = loginData;
-    } catch(_) {
-      // לא קיים — צור חדש
+    } catch(loginErr) {
+      // login נכשל — נסה signup
     }
+
+    // שלב 2: אם login נכשל — signup
     if (!userId) {
-      const authData = await sbAuth('signup', { email: invite.email, password: pass });
-      userId = authData.user?.id || authData.session?.user?.id;
+      let signupErr = null;
+      try {
+        const authData = await sbAuth('signup', { email: invite.email, password: pass });
+        userId = authData.user?.id || authData.session?.user?.id;
+        if (authData.session) { currentSession = authData.session; loginData = authData.session; }
+      } catch(e2) { signupErr = e2; }
+
+      // שלב 3: אם signup נכשל (חשבון כבר קיים עם סיסמה אחרת)
       if (!userId) {
-        // Supabase החזיר response ריק — ייתכן שדורש אימות אימייל
-        // ננסה login מיד
-        try {
-          loginData = await sbAuth('token?grant_type=password', { email: invite.email, password: pass });
-          userId = loginData?.user?.id;
-          currentSession = loginData;
-        } catch(_) {}
+        if (btn) { btn.disabled = false; btn.textContent = 'סיים הרשמה'; }
+        const errMsg = document.getElementById('sp-err');
+        errMsg.innerHTML = 'נראה שחשבון זה כבר קיים עם סיסמה אחרת. ' +
+          '<span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="sendPasswordReset(\'' + invite.email + '\')">לחץ כאן לשחזור סיסמה באימייל</span>';
+        return;
       }
-      if (!userId) throw new Error('לא הצלחנו לאמת את החשבון. נסה שוב או פנה למנהל.');
+
+      // אם signup הצליח — אמת את האימייל מיד (ב-DB)
+      // ונסה login
+      try {
+        loginData = await sbAuth('token?grant_type=password', { email: invite.email, password: pass });
+        userId = userId || loginData?.user?.id;
+        currentSession = loginData;
+      } catch(_) {}
     }
-    // שמור/עדכן record עם הרשאות — נקרא מה-invite record עצמו
+
+    if (!userId) throw new Error('לא הצלחנו לאמת את החשבון. נסה שוב או פנה למנהל.');
+
+    // שמור/עדכן record
     try {
       await sb('users', { method: 'POST', body: {
         id: userId, email: invite.email, full_name: invite.full_name,
@@ -2256,19 +2288,18 @@ async function completeInvite() {
         can_edit: invite.can_edit !== false,
         allowed_categories: invite.allowed_categories || null
       }});
-    } catch(e2) {
-      // ייתכן שהרשומה כבר קיימת — נעדכן
+    } catch(_) {
       try {
         await sb('users?id=eq.' + userId, { method: 'PATCH', body: {
           full_name: invite.full_name, role: invite.role || 'user',
           owner_id: invite.owner_id, can_edit: invite.can_edit !== false,
           allowed_categories: invite.allowed_categories || null
         }, prefer: 'return=minimal' });
-      } catch(_) {}
+      } catch(_2) {}
     }
     // סמן הזמנה כנוצלה
     try { await sb('user_invites?id=eq.' + invite.id, { method: 'PATCH', body: { used: true }, prefer: 'return=minimal' }); } catch(_) {}
-    // כניסה אוטומטית אם אין session עדיין
+
     if (!currentSession) {
       loginData = await sbAuth('token?grant_type=password', { email: invite.email, password: pass });
       currentSession = loginData;
