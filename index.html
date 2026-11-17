@@ -357,17 +357,31 @@ tr:hover td { background: var(--surface2); }
     <!-- REPORTS -->
     <div id="tab-reports" class="panel">
       <div class="section-title">דוחות מלאי</div>
-      <div class="fbar" style="flex-wrap:wrap;gap:8px">
-        <label style="font-size:.82rem;color:var(--fg2)">מ-</label>
-        <input type="date" id="rp-from" onchange="renderReport()" style="max-width:140px">
-        <label style="font-size:.82rem;color:var(--fg2)">עד-</label>
-        <input type="date" id="rp-to" onchange="renderReport()" style="max-width:140px">
-        <select id="rp-cat" onchange="renderReport()" style="min-width:140px"><option value="">כל הקטגוריות</option></select>
-        <div style="display:flex;gap:6px;margin-right:auto">
+      <div class="fbar" style="flex-wrap:wrap;gap:8px;align-items:flex-end">
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:.74rem;color:var(--fg3)">מתאריך</label>
+          <input type="date" id="rp-from" onchange="renderReport()" style="max-width:145px">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:.74rem;color:var(--fg3)">עד תאריך</label>
+          <input type="date" id="rp-to" onchange="renderReport()" style="max-width:145px">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:.74rem;color:var(--fg3)">קטגוריה</label>
+          <select id="rp-cat" onchange="renderReport()" style="min-width:140px"><option value="">כל הקטגוריות</option></select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:.74rem;color:var(--fg3)">תת-קטגוריה</label>
+          <select id="rp-subcat" onchange="renderReport()" style="min-width:140px"><option value="">כל תת-הקטגוריות</option></select>
+        </div>
+        <div style="display:flex;gap:6px;margin-right:auto;align-self:flex-end">
           <button class="btn-sm" id="rp-view-toggle" onclick="toggleRpView()">📋 תצוגת תנועות</button>
+          <button class="btn-sm" onclick="exportReportExcel()" title="ייצוא לאקסל">📥 אקסל</button>
+          <button class="btn-sm" onclick="printReport()" title="הדפסה">🖨️ הדפס</button>
         </div>
       </div>
       <div id="rp-date-heb" style="font-size:.8rem;color:var(--fg3);margin:6px 0 2px;min-height:18px"></div>
+      <div id="rp-insight" style="margin-bottom:8px"></div>
       <div id="rp-summary" class="tiles"></div>
       <div id="rp-table"></div>
       <div id="rp-movements" style="display:none"></div>
@@ -491,27 +505,39 @@ tr:hover td { background: var(--surface2); }
     <input type="hidden" id="subcat-cat-id">
     <div class="form-group"><label>שם *</label><input id="subcat-name"></div>
     <div style="margin-bottom:14px">
-      <div style="font-size:.8rem;font-weight:700;color:var(--fg2);margin-bottom:8px">📋 פרטים מותאמים למוצרים בתת-קטגוריה זו</div>
+      <div style="font-size:.8rem;font-weight:700;color:var(--fg2);margin-bottom:4px">📋 שדות פרטים מותאמים למוצרים בתת-קטגוריה זו</div>
+      <div style="font-size:.76rem;color:var(--fg3);margin-bottom:10px;line-height:1.5">
+        כל שדה שתגדיר כאן יופיע בטופס מוצר, ספירה ואספקה. <strong>סוגי שדות:</strong>
+        <span style="background:var(--surface2);border-radius:4px;padding:1px 5px">📝 טקסט חופשי</span> —
+        <span style="background:var(--surface2);border-radius:4px;padding:1px 5px">🔢 מספר</span> —
+        <span style="background:var(--surface2);border-radius:4px;padding:1px 5px">📋 רשימה</span> (בחירה מתוך ערכים שתגדיר)
+      </div>
       <div id="subcat-detail-types-list"></div>
-      <!-- טופס הוספת שדה inline -->
+      <!-- טופס הוספה/עריכת שדה inline -->
       <div id="subcat-add-field-form" style="background:var(--surface2);border-radius:var(--rs);padding:12px;margin-top:8px;display:none">
-        <div style="font-size:.8rem;font-weight:700;color:var(--accent);margin-bottom:8px">הוספת שדה חדש</div>
+        <div style="font-size:.8rem;font-weight:700;color:var(--accent);margin-bottom:8px" id="dt-form-title">➕ הוספת שדה חדש</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div class="form-group" style="margin:0"><label>שם השדה *</label><input id="new-dt-label" placeholder="לדוגמא: מידה"></div>
-          <div class="form-group" style="margin:0"><label>סוג</label>
+          <div class="form-group" style="margin:0">
+            <label>שם השדה * <span style="font-weight:400;color:var(--fg3)">(לדוגמא: מידה, צורה, צבע)</span></label>
+            <input id="new-dt-label" placeholder="לדוגמא: מידה">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>סוג שדה</label>
             <select id="new-dt-type">
-              <option value="text">טקסט חופשי</option>
-              <option value="number">מספר</option>
-              <option value="select">רשימה</option>
+              <option value="text">📝 טקסט חופשי — כל תוכן</option>
+              <option value="number">🔢 מספר — כמות / מידה מספרית</option>
+              <option value="select">📋 רשימה — בחירה מרשימה קבועה</option>
             </select>
           </div>
         </div>
         <div class="form-group" id="new-dt-values-wrap" style="margin:0;display:none">
-          <label>ערכים אפשריים (מופרדים בפסיק)</label>
-          <input id="new-dt-values" placeholder="לדוגמא: S, M, L, XL">
+          <label>ערכים אפשריים ברשימה <span style="font-weight:400;color:var(--fg3)">(הפרד בפסיק)</span></label>
+          <input id="new-dt-values" placeholder="לדוגמא: S, M, L, XL  או  שחור, לבן, אדום">
+          <div style="font-size:.74rem;color:var(--fg3);margin-top:3px">💡 אפשר להוסיף ערכים נוספים בעריכה מאוחר יותר</div>
         </div>
+        <input type="hidden" id="dt-edit-idx" value="-1">
         <div style="display:flex;gap:8px;margin-top:10px">
-          <button class="btn-sm btn-primary" onclick="confirmAddDetailType()">הוסף שדה</button>
+          <button class="btn-sm btn-primary" onclick="confirmAddDetailType()">✓ שמור שדה</button>
           <button class="btn-sm" onclick="document.getElementById('subcat-add-field-form').style.display='none'">ביטול</button>
         </div>
       </div>
@@ -732,8 +758,15 @@ function fmtHebrewDate(dateStr) {
   if (!dateStr) return '';
   try {
     const [y,m,d] = dateStr.split('-').map(Number);
-    const heb = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {day:'numeric',month:'long',year:'numeric'}).format(new Date(y,m-1,d));
-    return heb;
+    const dt = new Date(y, m-1, d);
+    // קבל יום, חודש, שנה בנפרד בלוח עברי
+    const dayFmt  = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {day:'numeric'}).format(dt);
+    const monFmt  = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {month:'long'}).format(dt);
+    const yearFmt = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {year:'numeric'}).format(dt);
+    // נקה את המילה "בשנת" / "שנת" שמופיעה לפעמים בשנה
+    const yearClean = yearFmt.replace(/^(שנת\s*|בשנת\s*)/, '').trim();
+    // הרכב: כא תשרי תשפ"ז
+    return dayFmt + ' ' + monFmt + ' ' + yearClean;
   } catch(e) { return ''; }
 }
 function fmtDateFull(dateStr) {
@@ -1319,26 +1352,41 @@ function renderReport() {
   const to   = document.getElementById('rp-to').value;
   const catSel = document.getElementById('rp-cat');
   const catF = catSel.value;
+  const subcatSel = document.getElementById('rp-subcat');
+  const subcatF = subcatSel?.value || '';
+
   // עדכן dropdown קטגוריות
   const cur = catSel.value;
   catSel.innerHTML = '<option value="">כל הקטגוריות</option>' + categories.map(c => '<option value="' + c.id + '"' + (c.id===cur?' selected':'') + '>' + esc(c.name) + '</option>').join('');
+  catSel.value = cur;
+
+  // עדכן dropdown תת-קטגוריות לפי קטגוריה נבחרת
+  if (subcatSel) {
+    const subcurVal = subcatSel.value;
+    const relevantSubs = catF ? subcategories.filter(s => s.category_id === catF) : subcategories;
+    subcatSel.innerHTML = '<option value="">כל תת-הקטגוריות</option>' + relevantSubs.map(s => '<option value="' + s.id + '"' + (s.id===subcurVal?' selected':'') + '>' + esc(s.name) + '</option>').join('');
+  }
 
   // תאריכים עבריים
   const hebFrom = from ? fmtHebrewDate(from) : '';
   const hebTo   = to   ? fmtHebrewDate(to)   : '';
   const hebEl = document.getElementById('rp-date-heb');
   if (from && to && hebEl) {
-    hebEl.innerHTML = '📅 ' + hebFrom + ' — ' + hebTo;
+    hebEl.innerHTML = '📅 ' + fmtDate(from) + (hebFrom?' <span style="color:var(--fg3);font-size:.85em">' + hebFrom + '</span>':'') + ' — ' + fmtDate(to) + (hebTo?' <span style="color:var(--fg3);font-size:.85em">' + hebTo + '</span>':'');
   } else if (hebEl) hebEl.innerHTML = '';
 
   if (!from || !to) {
     document.getElementById('rp-summary').innerHTML = '';
     document.getElementById('rp-table').innerHTML = '<div class="empty">בחר טווח תאריכים להצגת הדוח</div>';
     document.getElementById('rp-movements').innerHTML = '';
+    if (document.getElementById('rp-insight')) document.getElementById('rp-insight').innerHTML = '';
     return;
   }
 
-  const list = products.filter(p => !catF || p.category_id === catF);
+  const list = products.filter(p =>
+    (!catF || p.category_id === catF) &&
+    (!subcatF || p.subcategory_id === subcatF)
+  );
   let tO=0, tA=0, tC=0, tS=0, tP=0;
 
   const rows = list.map(p => {
@@ -1349,6 +1397,27 @@ function renderReport() {
     tO+=o; tA+=a; tC+=c; tS+=s; tP += s*(p.price||0);
     return { p, o, a, c, s, pay: s*(p.price||0) };
   }).filter(r => r.o || r.a || r.c || r.s);
+
+  // מידע חכם על הדוח
+  const supplyInPeriod = supply.filter(s => s.date >= from && s.date <= to && (!catF || getProduct(s.product_id)?.category_id === catF) && (!subcatF || getProduct(s.product_id)?.subcategory_id === subcatF));
+  const countsInPeriod = counts.filter(c => c.date >= from && c.date <= to && (!catF || getProduct(c.product_id)?.category_id === catF) && (!subcatF || getProduct(c.product_id)?.subcategory_id === subcatF));
+  const supplyDates = [...new Set(supplyInPeriod.map(s=>s.date))].sort();
+  const countDates  = [...new Set(countsInPeriod.map(c=>c.date))].sort();
+  const openingCountDate = countDates.find(d => d <= from) || (countDates.length ? countDates[0] : null);
+  const closingCountDate = [...countDates].reverse().find(d => d <= to) || null;
+  const insightEl = document.getElementById('rp-insight');
+  if (insightEl && rows.length) {
+    const turnover = tO > 0 ? Math.round((tS/tO)*100) : null;
+    insightEl.innerHTML = '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px 16px;font-size:.82rem;color:var(--fg2);line-height:1.8">' +
+      '<strong style="color:var(--fg1);font-size:.85rem">📊 סיכום תקופה</strong> &nbsp;' +
+      (supplyDates.length ? '📦 אספקות: <strong>' + supplyDates.length + '</strong> תאריכים שונים (' + supplyDates.map(fmtDate).join(', ') + ')' : '📦 לא נרשמו אספקות בתקופה') +
+      ' &nbsp;|&nbsp; ' +
+      (countDates.length ? '🔢 ספירות: <strong>' + countDates.length + '</strong> תאריכים (' + countDates.map(fmtDate).join(', ') + ')' : '🔢 לא נרשמו ספירות מלאי') +
+      (openingCountDate && openingCountDate <= from ? ' &nbsp;|&nbsp; מלאי פתיחה מתאריך: <strong>' + fmtDate(openingCountDate) + '</strong>' : '') +
+      (closingCountDate ? ' &nbsp;|&nbsp; מלאי סגירה מתאריך: <strong>' + fmtDate(closingCountDate) + '</strong>' : '') +
+      (turnover !== null ? ' &nbsp;|&nbsp; מחזור מלאי: <strong>' + turnover + '%</strong>' : '') +
+      '</div>';
+  } else if (insightEl) insightEl.innerHTML = '';
 
   // סיכום
   document.getElementById('rp-summary').innerHTML =
@@ -1397,30 +1466,33 @@ function renderReport() {
     '</tr>' +
     '</tbody></table></div></div>';
 
+  // שמור נתונים לייצוא
+  window._rpExportData = { rows, tO, tA, tC, tS, tP, from, to };
+
   // תצוגת תנועות — היסטוריית אספקה+ספירות בתקופה לפי קטגוריה
-  renderRpMovements(from, to, catF);
+  renderRpMovements(from, to, catF, subcatF);
 
   // הצג/הסתר לפי view
   document.getElementById('rp-table').style.display = _rpView === 'table' ? '' : 'none';
   document.getElementById('rp-movements').style.display = _rpView === 'movements' ? '' : 'none';
 }
 
-function renderRpMovements(from, to, catF) {
+function renderRpMovements(from, to, catF, subcatF) {
   // אסוף תנועות: אספקה + ספירות מלאי
   const supplyEvts = supply
     .filter(s => s.date >= from && s.date <= to)
-    .filter(s => !catF || (getProduct(s.product_id)?.category_id === catF))
+    .filter(s => (!catF || (getProduct(s.product_id)?.category_id === catF)) && (!subcatF || (getProduct(s.product_id)?.subcategory_id === subcatF)))
     .map(s => {
       const p = getProduct(s.product_id);
-      return { date: s.date, type: 'supply', typeLbl: '📦 אספקה', product: p?.name||'?', details: detailBadges(p), qty: s.quantity, note: s.notes||'', catId: p?.category_id };
+      return { date: s.date, type: 'supply', typeLbl: '📦 אספקה', product: p?.name||'?', details: detailBadges(p), qty: s.qty||s.quantity||0, note: s.notes||'', catId: p?.category_id };
     });
 
   const countEvts = counts
     .filter(c => c.date >= from && c.date <= to)
-    .filter(c => !catF || (getProduct(c.product_id)?.category_id === catF))
+    .filter(c => (!catF || (getProduct(c.product_id)?.category_id === catF)) && (!subcatF || (getProduct(c.product_id)?.subcategory_id === subcatF)))
     .map(c => {
       const p = getProduct(c.product_id);
-      return { date: c.date, type: 'count', typeLbl: '🔢 ספירה', product: p?.name||'?', details: detailBadges(p), qty: c.quantity, note: c.notes||'', catId: p?.category_id };
+      return { date: c.date, type: 'count', typeLbl: '🔢 ספירה', product: p?.name||'?', details: detailBadges(p), qty: c.count||c.quantity||0, note: c.notes||'', catId: p?.category_id };
     });
 
   const all = [...supplyEvts, ...countEvts].sort((a,b) => b.date.localeCompare(a.date));
@@ -1445,6 +1517,108 @@ function renderRpMovements(from, to, catF) {
       '</tr>'
     ).join('') +
     '</tbody></table></div></div>';
+}
+
+// ══════════════════════════════════════════
+//  EXPORT / PRINT
+// ══════════════════════════════════════════
+function exportReportExcel() {
+  const d = window._rpExportData;
+  if (!d || !d.rows || !d.rows.length) { alert('אין נתונים לייצוא — בחר טווח תאריכים תחילה'); return; }
+  const from = d.from, to = d.to;
+  const catName = document.getElementById('rp-cat').options[document.getElementById('rp-cat').selectedIndex]?.text || 'כל הקטגוריות';
+  const subcatName = document.getElementById('rp-subcat')?.options[document.getElementById('rp-subcat')?.selectedIndex]?.text || '';
+
+  // בנה CSV בעברית (UTF-8 BOM)
+  const BOM = '﻿';
+  const lines = [];
+  lines.push('דוח מלאי — ' + catName + (subcatName && subcatName !== 'כל תת-הקטגוריות' ? ' / ' + subcatName : ''));
+  lines.push('תקופה: ' + fmtDate(from) + ' (' + fmtHebrewDate(from) + ')' + ' — ' + fmtDate(to) + ' (' + fmtHebrewDate(to) + ')');
+  lines.push('');
+  lines.push(['מוצר','פרטים','קטגוריה','מלאי פתיחה','קניות (אספקה)','מלאי סגירה','נמכר','הכנסה'].join(','));
+
+  d.rows.forEach(r => {
+    // פרטים כטקסט רגיל
+    const detailTxt = r.p.details ? Object.entries(r.p.details).map(([k,v])=>k+':'+v).join(' | ') : '';
+    const catTxt = getCat(r.p.category_id)?.name || '';
+    lines.push([
+      '"' + (r.p.name||'').replace(/"/g,'""') + '"',
+      '"' + detailTxt.replace(/"/g,'""') + '"',
+      '"' + catTxt.replace(/"/g,'""') + '"',
+      r.o, r.a, r.c, r.s,
+      '"' + fmtMoney(r.pay).replace(/"/g,'""') + '"'
+    ].join(','));
+  });
+  lines.push(['','','סה"כ', d.tO, d.tA, d.tC, d.tS, '"' + fmtMoney(d.tP) + '"'].join(','));
+
+  const blob = new Blob([BOM + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'דוח_מלאי_' + from + '_עד_' + to + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function printReport() {
+  const d = window._rpExportData;
+  if (!d || !d.rows || !d.rows.length) { alert('אין נתונים להדפסה — בחר טווח תאריכים תחילה'); return; }
+  const from = d.from, to = d.to;
+  const catName = document.getElementById('rp-cat').options[document.getElementById('rp-cat').selectedIndex]?.text || 'כל הקטגוריות';
+  const rows = d.rows;
+
+  const printRows = rows.map(r => {
+    const detailTxt = r.p.details ? Object.entries(r.p.details).map(([k,v])=>'<span style="background:#eef;padding:1px 5px;border-radius:4px;font-size:11px">'+k+': '+v+'</span>').join(' ') : '—';
+    const catTxt = getCat(r.p.category_id)?.name || '';
+    return `<tr>
+      <td>${esc(r.p.name)}</td>
+      <td>${detailTxt}</td>
+      <td>${catTxt}</td>
+      <td style="text-align:center">${r.o||'—'}</td>
+      <td style="text-align:center;color:#1a73e8;font-weight:600">${r.a||'—'}</td>
+      <td style="text-align:center">${r.c||'—'}</td>
+      <td style="text-align:center;font-weight:700;color:${r.s>0?'#2e7d32':r.s<0?'#c62828':'#888'}">${r.s||'—'}</td>
+      <td style="text-align:left">${r.pay?fmtMoney(r.pay):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
+  <title>דוח מלאי ${from} — ${to}</title>
+  <style>
+    body { font-family: Arial, sans-serif; direction: rtl; margin: 20px; color: #222; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    .sub { font-size: 13px; color: #555; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { background: #1a73e8; color: #fff; padding: 8px 10px; text-align: right; }
+    tbody tr:nth-child(even) { background: #f5f8ff; }
+    tbody td { padding: 7px 10px; border-bottom: 1px solid #e0e0e0; }
+    tfoot td { background: #e8f4ff; font-weight: 700; padding: 8px 10px; }
+    .summary { display: flex; gap: 20px; margin-bottom: 16px; flex-wrap: wrap; }
+    .s-tile { background: #f5f8ff; border-radius: 8px; padding: 10px 18px; text-align: center; border: 1px solid #c8daf8; }
+    .s-tile .lbl { font-size: 11px; color: #666; }
+    .s-tile .val { font-size: 20px; font-weight: 700; color: #1a73e8; }
+    @media print { @page { size: A4 landscape; margin: 1cm; } }
+  </style></head><body>
+  <h1>📦 דוח מלאי — ${esc(catName)}</h1>
+  <div class="sub">תקופה: ${fmtDate(from)} (${fmtHebrewDate(from)}) — ${fmtDate(to)} (${fmtHebrewDate(to)})</div>
+  <div class="summary">
+    <div class="s-tile"><div class="lbl">מלאי פתיחה</div><div class="val">${d.tO}</div></div>
+    <div class="s-tile"><div class="lbl">קניות (אספקה)</div><div class="val" style="color:#1a73e8">${d.tA}</div></div>
+    <div class="s-tile"><div class="lbl">מלאי סגירה</div><div class="val">${d.tC}</div></div>
+    <div class="s-tile"><div class="lbl">נמכר</div><div class="val" style="color:#2e7d32">${d.tS}</div></div>
+    <div class="s-tile"><div class="lbl">הכנסה</div><div class="val" style="color:#2e7d32;font-size:16px">${fmtMoney(d.tP)}</div></div>
+  </div>
+  <table>
+    <thead><tr><th>מוצר</th><th>פרטים</th><th>קטגוריה</th><th>פתיחה</th><th>קניות</th><th>סגירה</th><th>נמכר</th><th>הכנסה</th></tr></thead>
+    <tbody>${printRows}</tbody>
+    <tfoot><tr><td colspan="3">סה"כ</td><td style="text-align:center">${d.tO}</td><td style="text-align:center;color:#1a73e8">${d.tA}</td><td style="text-align:center">${d.tC}</td><td style="text-align:center;color:#2e7d32">${d.tS}</td><td>${fmtMoney(d.tP)}</td></tr></tfoot>
+  </table>
+  <div style="margin-top:20px;font-size:11px;color:#999">הופק ב-${new Date().toLocaleDateString('he-IL')} (${fmtHebrewDate(new Date().toISOString().slice(0,10))})</div>
+  <script>window.onload=()=>window.print()<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
 }
 
 // ══════════════════════════════════════════
@@ -1522,33 +1696,57 @@ function renderSubcatDetailTypesList() {
   const list = document.getElementById('subcat-detail-types-list');
   if (!list) return;
   const items = window._subcatDetailTypes || [];
-  if (!items.length) { list.innerHTML = '<div style="color:var(--fg3);font-size:.82rem;padding:8px 0;text-align:center">אין שדות מוגדרים עדיין</div>'; return; }
+  if (!items.length) {
+    list.innerHTML = '<div style="color:var(--fg3);font-size:.82rem;padding:12px;text-align:center;background:var(--surface2);border-radius:var(--rs)">אין שדות מוגדרים עדיין — לחץ "+ הוסף שדה פרט" להתחלה</div>';
+    return;
+  }
   list.innerHTML = items.map((dt, idx) => {
     const avStr = dt.allowedValues?.length ? dt.allowedValues.join(', ') : '';
     const typeLabel = dt.inputType === 'number' ? '🔢 מספר' : (avStr ? '📋 רשימה' : '📝 טקסט');
-    return '<div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:8px 12px;margin-bottom:6px">' +
-      '<span style="font-size:1rem">⠿</span>' +
-      '<div style="flex:1"><strong style="font-size:.87rem">' + esc(dt.label) + '</strong>' +
-        '<span style="font-size:.74rem;color:var(--fg3);margin-right:8px">' + typeLabel + '</span>' +
-        (avStr ? '<div style="font-size:.74rem;color:var(--fg3);margin-top:2px">ערכים: ' + esc(avStr) + '</div>' : '') +
+    const typeBg = dt.inputType === 'number' ? '#e8f4ff' : (avStr ? '#f0f7ee' : '#fdf6e8');
+    const typeColor = dt.inputType === 'number' ? '#1a73e8' : (avStr ? '#2e7d32' : '#e65100');
+    return '<div style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px;margin-bottom:6px">' +
+      '<div style="flex:1">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:' + (avStr?'4':'0') + 'px">' +
+          '<strong style="font-size:.9rem">' + esc(dt.label) + '</strong>' +
+          '<span style="font-size:.72rem;padding:1px 7px;border-radius:10px;background:' + typeBg + ';color:' + typeColor + '">' + typeLabel + '</span>' +
+        '</div>' +
+        (avStr ? '<div style="font-size:.74rem;color:var(--fg3)">ערכים: ' + esc(avStr) + '</div>' : '') +
       '</div>' +
-      '<button class="btn-sm btn-danger" onclick="removeSubcatDetailType(' + idx + ')" title="הסר">✕</button>' +
+      '<button class="btn-sm" onclick="editSubcatDetailType(' + idx + ')" title="ערוך שדה">✏️ ערוך</button>' +
+      '<button class="btn-sm btn-danger" onclick="removeSubcatDetailType(' + idx + ')" title="הסר שדה" style="padding:3px 8px">✕</button>' +
       '</div>';
   }).join('');
 }
 
-function showAddDetailTypeForm() {
-  document.getElementById('subcat-add-field-form').style.display = '';
-  document.getElementById('new-dt-label').value = '';
-  document.getElementById('new-dt-type').value = 'text';
-  document.getElementById('new-dt-values-wrap').style.display = 'none';
-  document.getElementById('new-dt-values').value = '';
+function showAddDetailTypeForm(editIdx) {
+  const form = document.getElementById('subcat-add-field-form');
+  form.style.display = '';
+  const isEdit = editIdx !== undefined && editIdx >= 0;
+  document.getElementById('dt-form-title').textContent = isEdit ? '✏️ עריכת שדה' : '➕ הוספת שדה חדש';
+  document.getElementById('dt-edit-idx').value = isEdit ? editIdx : -1;
+  if (isEdit) {
+    const dt = (window._subcatDetailTypes || [])[editIdx];
+    if (dt) {
+      document.getElementById('new-dt-label').value = dt.label || '';
+      const typeVal = dt.inputType === 'number' ? 'number' : (dt.allowedValues?.length ? 'select' : 'text');
+      document.getElementById('new-dt-type').value = typeVal;
+      document.getElementById('new-dt-values').value = dt.allowedValues ? dt.allowedValues.join(', ') : '';
+      document.getElementById('new-dt-values-wrap').style.display = typeVal === 'select' ? '' : 'none';
+    }
+  } else {
+    document.getElementById('new-dt-label').value = '';
+    document.getElementById('new-dt-type').value = 'text';
+    document.getElementById('new-dt-values-wrap').style.display = 'none';
+    document.getElementById('new-dt-values').value = '';
+  }
   document.getElementById('new-dt-label').focus();
-  // הצג/הסתר ערכים כשמשנים סוג
   document.getElementById('new-dt-type').onchange = function() {
     document.getElementById('new-dt-values-wrap').style.display = this.value === 'select' ? '' : 'none';
   };
 }
+
+function editSubcatDetailType(idx) { showAddDetailTypeForm(idx); }
 
 function confirmAddDetailType() {
   const label = document.getElementById('new-dt-label').value.trim();
@@ -1563,7 +1761,12 @@ function confirmAddDetailType() {
   if (!window._subcatDetailTypes) window._subcatDetailTypes = [];
   const dt = { label, inputType };
   if (allowedValues?.length) dt.allowedValues = allowedValues;
-  window._subcatDetailTypes.push(dt);
+  const editIdx = parseInt(document.getElementById('dt-edit-idx').value);
+  if (editIdx >= 0) {
+    window._subcatDetailTypes[editIdx] = dt; // עדכן שדה קיים
+  } else {
+    window._subcatDetailTypes.push(dt); // הוסף חדש
+  }
   renderSubcatDetailTypesList();
   document.getElementById('subcat-add-field-form').style.display = 'none';
 }
