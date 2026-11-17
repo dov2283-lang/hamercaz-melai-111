@@ -2118,7 +2118,7 @@ async function saveUserPerms() {
 }
 
 async function createInvite() {
-  const email = document.getElementById('invite-email').value.trim();
+  const email = document.getElementById('invite-email').value.trim().toLowerCase();
   const name = document.getElementById('invite-name').value.trim();
   const role = document.getElementById('invite-role').value;
   const canEdit = document.getElementById('invite-can-edit').checked;
@@ -2192,6 +2192,8 @@ async function checkInviteToken() {
     // הוסף הסבר מה האימייל
     document.getElementById('sp-err').textContent = '';
     const emailHint = document.getElementById('sp-email-hint');
+    // normalize email to lowercase
+    invite.email = (invite.email || '').toLowerCase();
     if (emailHint) emailHint.textContent = 'האימייל שלך: ' + invite.email;
     window._activeInvite = invite;
     document.getElementById('modal-set-password').classList.add('open');
