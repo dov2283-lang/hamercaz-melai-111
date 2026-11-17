@@ -611,7 +611,7 @@ tr:hover td { background: var(--surface2); }
     <div class="auth-err" id="invite-err"></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-invite')">ביטול</button>
-      <button class="btn btn-primary" id="invite-submit-btn" onclick="createInvite()">שלח הזמנה</button>
+      <button class="btn btn-primary" id="invite-submit-btn" onclick="inviteSubmitAction()">שלח הזמנה</button>
     </div>
     <div id="invite-link-box" style="display:none;margin-top:12px;background:var(--ok-lt);border-radius:var(--rs);padding:12px">
       <div style="font-size:.82rem;font-weight:700;color:var(--ok);margin-bottom:6px">✓ ההזמנה נוצרה! שלח את הקישור הזה למשתמש:</div>
@@ -632,6 +632,7 @@ tr:hover td { background: var(--surface2); }
     <div class="modal-title">הגדרת סיסמה ראשונית</div>
     <p style="font-size:.88rem;color:var(--fg2);margin-bottom:16px">ברוך הבא! הגדר סיסמה לחשבון שלך.</p>
     <div class="form-group"><label>שם מלא</label><input id="sp-name" readonly style="background:var(--surface2)"></div>
+    <div style="font-size:.82rem;color:var(--ok);font-weight:600;margin-bottom:12px;padding:8px 12px;background:var(--ok-lt);border-radius:var(--rs)" id="sp-email-hint"></div>
     <div class="form-group"><label>סיסמה חדשה *</label><input type="password" id="sp-pass" placeholder="לפחות 6 תווים" autocomplete="new-password"></div>
     <div class="form-group"><label>אימות סיסמה *</label><input type="password" id="sp-pass2" placeholder="הקלד שוב" autocomplete="new-password"></div>
     <div class="auth-err" id="sp-err"></div>
@@ -2035,8 +2036,16 @@ function toggleInviteAllCats() {
   document.getElementById('invite-cats-grid').style.display = checked ? 'none' : 'grid';
 }
 
+let _inviteMode = 'create'; // 'create' | 'edit'
+function inviteSubmitAction() {
+  if (_inviteMode === 'edit') saveUserPerms();
+  else createInvite();
+}
+
 function openInviteModal() {
+  _inviteMode = 'create';
   document.getElementById('invite-modal-title').textContent = 'הזמנת משתמש חדש';
+  document.getElementById('invite-submit-btn').textContent = 'שלח הזמנה';
   document.getElementById('invite-user-id').value = '';
   document.getElementById('invite-email').value = '';
   document.getElementById('invite-name').value = '';
@@ -2056,14 +2065,13 @@ function openInviteModal() {
 }
 
 function openEditPermModal(userId) {
-  const u = document.querySelector('[data-uid="' + userId + '"]') || null;
-  // מצא את המשתמש מה-DOM
+  _inviteMode = 'edit';
   document.getElementById('invite-modal-title').textContent = 'עריכת הרשאות';
   document.getElementById('invite-user-id').value = userId;
   document.getElementById('invite-err').textContent = '';
   document.getElementById('invite-link-box').style.display = 'none';
   document.getElementById('invite-submit-btn').textContent = 'שמור הרשאות';
-  document.getElementById('invite-submit-btn').onclick = saveUserPerms;
+  document.getElementById('invite-submit-btn').style.display = '';
   // נסה לטעון נתוני משתמש
   sb('users?id=eq.' + userId + '&select=*').then(rows => {
     const user = rows?.[0];
@@ -2164,16 +2172,43 @@ async function checkInviteToken() {
   const params = new URLSearchParams(location.search);
   const token = params.get('invite');
   if (!token) return;
+  // הצג spinner בזמן בדיקה
+  document.getElementById('auth-screen').innerHTML = '<div style="text-align:center;padding:60px 24px"><div class="spinner" style="margin:0 auto 16px"></div><div style="color:var(--fg2);font-size:.95rem">בודק קישור הזמנה...</div></div>';
   try {
-    const rows = await sb('user_invites?token=eq.' + token + '&used=eq.false&select=*');
-    const invite = rows?.[0];
-    if (!invite) { alert('קישור הזמנה לא תקף או פג תוקף'); return; }
+    // בדוק תחילה אם ה-token קיים (ללא סינון used)
+    const allRows = await sb('user_invites?token=eq.' + token + '&select=*');
+    if (!allRows || allRows.length === 0) {
+      showInviteError('קישור ההזמנה לא נמצא במערכת. ייתכן שהקישור שגוי או נמחק. פנה למנהל המערכת.');
+      return;
+    }
+    const invite = allRows[0];
+    if (invite.used) {
+      showInviteError('הזמנה זו כבר נוצלה. אם כבר נרשמת, התחבר עם האימייל והסיסמה שהגדרת. אם לא, פנה למנהל לקבלת הזמנה חדשה.');
+      return;
+    }
     // הצג מסך הגדרת סיסמה
-    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('sp-name').value = invite.full_name;
+    // הוסף הסבר מה האימייל
+    document.getElementById('sp-err').textContent = '';
+    const emailHint = document.getElementById('sp-email-hint');
+    if (emailHint) emailHint.textContent = 'האימייל שלך: ' + invite.email;
     window._activeInvite = invite;
     document.getElementById('modal-set-password').classList.add('open');
-  } catch(e) {}
+  } catch(e) {
+    showInviteError('שגיאה בבדיקת הקישור: ' + e.message + '. נסה לרענן את הדף.');
+  }
+}
+
+function showInviteError(msg) {
+  document.getElementById('auth-screen').innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px">' +
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 36px;max-width:420px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.08)">' +
+    '<div style="font-size:2.5rem;margin-bottom:12px">⚠️</div>' +
+    '<div style="font-size:1.1rem;font-weight:700;color:var(--fg);margin-bottom:12px">בעיה עם הקישור</div>' +
+    '<div style="font-size:.88rem;color:var(--fg2);line-height:1.6;margin-bottom:24px">' + esc(msg) + '</div>' +
+    '<button class="btn btn-primary" onclick="location.href=\'/?t=\'+Date.now()">חזור למסך הכניסה</button>' +
+    '</div></div>';
 }
 
 async function completeInvite() {
@@ -2184,29 +2219,64 @@ async function completeInvite() {
   if (pass !== pass2) { document.getElementById('sp-err').textContent = 'הסיסמאות אינן תואמות'; return; }
   const invite = window._activeInvite;
   if (!invite) return;
+  const btn = document.querySelector('#modal-set-password .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'מייצר חשבון...'; }
   try {
-    // צור משתמש
-    const authData = await sbAuth('signup', { email: invite.email, password: pass });
-    const userId = authData.user?.id;
-    if (!userId) throw new Error('שגיאה ביצירת חשבון');
-    // שמור record עם הרשאות — נקרא מה-invite record עצמו שכולל role/can_edit/allowed_categories
-    await sb('users', { method: 'POST', body: {
-      id: userId, email: invite.email, full_name: invite.full_name,
-      role: invite.role || 'user', owner_id: invite.owner_id,
-      can_edit: invite.can_edit !== false,
-      allowed_categories: invite.allowed_categories || null
-    }});
+    // נסה login ראשון — אולי החשבון כבר קיים (ניסיון קודם)
+    let userId = null;
+    let loginData = null;
+    try {
+      loginData = await sbAuth('token?grant_type=password', { email: invite.email, password: pass });
+      userId = loginData?.user?.id;
+      currentSession = loginData;
+    } catch(_) {
+      // לא קיים — צור חדש
+    }
+    if (!userId) {
+      const authData = await sbAuth('signup', { email: invite.email, password: pass });
+      userId = authData.user?.id || authData.session?.user?.id;
+      if (!userId) {
+        // Supabase החזיר response ריק — ייתכן שדורש אימות אימייל
+        // ננסה login מיד
+        try {
+          loginData = await sbAuth('token?grant_type=password', { email: invite.email, password: pass });
+          userId = loginData?.user?.id;
+          currentSession = loginData;
+        } catch(_) {}
+      }
+      if (!userId) throw new Error('לא הצלחנו לאמת את החשבון. נסה שוב או פנה למנהל.');
+    }
+    // שמור/עדכן record עם הרשאות — נקרא מה-invite record עצמו
+    try {
+      await sb('users', { method: 'POST', body: {
+        id: userId, email: invite.email, full_name: invite.full_name,
+        role: invite.role || 'user', owner_id: invite.owner_id,
+        can_edit: invite.can_edit !== false,
+        allowed_categories: invite.allowed_categories || null
+      }});
+    } catch(e2) {
+      // ייתכן שהרשומה כבר קיימת — נעדכן
+      try {
+        await sb('users?id=eq.' + userId, { method: 'PATCH', body: {
+          full_name: invite.full_name, role: invite.role || 'user',
+          owner_id: invite.owner_id, can_edit: invite.can_edit !== false,
+          allowed_categories: invite.allowed_categories || null
+        }, prefer: 'return=minimal' });
+      } catch(_) {}
+    }
     // סמן הזמנה כנוצלה
-    await sb('user_invites?id=eq.' + invite.id, { method: 'PATCH', body: { used: true }, prefer: 'return=minimal' });
-    // כניסה אוטומטית
-    const loginData = await sbAuth('token?grant_type=password', { email: invite.email, password: pass });
-    currentSession = loginData;
+    try { await sb('user_invites?id=eq.' + invite.id, { method: 'PATCH', body: { used: true }, prefer: 'return=minimal' }); } catch(_) {}
+    // כניסה אוטומטית אם אין session עדיין
+    if (!currentSession) {
+      loginData = await sbAuth('token?grant_type=password', { email: invite.email, password: pass });
+      currentSession = loginData;
+    }
     closeModal('modal-set-password');
-    document.getElementById('auth-screen').style.display = 'flex';
     history.replaceState({}, '', '/');
     await onSignIn();
   } catch(e) {
-    document.getElementById('sp-err').textContent = 'שגיאה: ' + e.message;
+    if (btn) { btn.disabled = false; btn.textContent = 'סיים הרשמה'; }
+    document.getElementById('sp-err').textContent = 'שגיאה: ' + (e.message || JSON.stringify(e));
   }
 }
 
@@ -2399,7 +2469,7 @@ function generateInsights() {
     insights.push({
       icon: '🚨', title: 'מוצרים שאזלו מהמלאי (' + zeroProds.length + ')',
       bg: 'var(--err-lt)', border: 'var(--err)', color: 'var(--err)',
-      body: zeroProds.slice(0,5).map(p => '• ' + esc(p.name)).join('<br>') + (zeroProds.length>5 ? '<br>ועוד ' + (zeroProds.length-5) + '...' : ''),
+      body: zeroProds.slice(0,5).map(p => '• ' + esc(p.name) + (p.details && Object.keys(p.details).length ? ' <span style="font-size:.74rem;color:var(--fg3)">(' + Object.entries(p.details).map(([k,v])=>k+': '+v).join(', ') + ')</span>' : '')).join('<br>') + (zeroProds.length>5 ? '<br>ועוד ' + (zeroProds.length-5) + '...' : ''),
       reason: 'מוצרים אלה מוגדרים כפעילים אך אין להם מלאי — סביר שצריך להזמין מחדש.'
     });
   }
@@ -2410,7 +2480,7 @@ function generateInsights() {
     insights.push({
       icon: '⚡', title: 'מלאי נמוך — שקול להזמין (' + lowProds.length + ')',
       bg: 'var(--warn-lt)', border: 'var(--warn)', color: 'var(--warn)',
-      body: lowProds.slice(0,5).map(p => '• ' + esc(p.name) + ' — נותרו ' + currentStock(p.id) + ' יח\'').join('<br>'),
+      body: lowProds.slice(0,5).map(p => '• ' + esc(p.name) + (p.details && Object.keys(p.details).length ? ' <span style="font-size:.74rem;color:var(--fg3)">(' + Object.entries(p.details).map(([k,v])=>k+': '+v).join(', ') + ')</span>' : '') + ' — נותרו ' + currentStock(p.id) + ' יח\'').join('<br>'),
       reason: 'מלאי של 1-5 יחידות — בהתאם לקצב המכירות, יתכן שיאזל בקרוב.'
     });
   }
@@ -2428,7 +2498,7 @@ function generateInsights() {
     insights.push({
       icon: '🏆', title: 'המוצרים הנמכרים ביותר (30 יום אחרונים)',
       bg: 'var(--ok-lt)', border: 'var(--ok)', color: 'var(--ok)',
-      body: topSellers.map(([id,qty]) => '• ' + esc(getProduct(id)?.name||'?') + ' — ' + qty + ' יח\' נמכרו').join('<br>'),
+      body: topSellers.map(([id,qty]) => { const p=getProduct(id); return '• ' + esc(p?.name||'?') + (p?.details && Object.keys(p.details).length ? ' <span style="font-size:.74rem;color:var(--fg3)">(' + Object.entries(p.details).map(([k,v])=>k+': '+v).join(', ') + ')</span>' : '') + ' — ' + qty + ' יח\' נמכרו'; }).join('<br>'),
       reason: 'מוצרים אלה בעלי מחזור גבוה — כדאי לוודא שיש מספיק מלאי בהישג יד.'
     });
   }
@@ -2445,7 +2515,7 @@ function generateInsights() {
     insights.push({
       icon: '🧊', title: 'מלאי ללא תנועה 30 יום (' + frozenProds.length + ' מוצרים)',
       bg: 'var(--surface2)', border: 'var(--border)', color: 'var(--fg2)',
-      body: frozenProds.slice(0,4).map(p => '• ' + esc(p.name) + ' — ' + currentStock(p.id) + ' יח\'').join('<br>'),
+      body: frozenProds.slice(0,4).map(p => '• ' + esc(p.name) + (p.details && Object.keys(p.details).length ? ' <span style="font-size:.74rem;color:var(--fg3)">(' + Object.entries(p.details).map(([k,v])=>k+': '+v).join(', ') + ')</span>' : '') + ' — ' + currentStock(p.id) + ' יח\'').join('<br>'),
       reason: 'לא נרשמה אספקה או ספירה למוצרים אלה ב-30 הימים האחרונים. ייתכן שהם מוצרים עם ביקוש נמוך — שקול האם כדאי להגדיר כ"סיום".'
     });
   }
@@ -2456,7 +2526,7 @@ function generateInsights() {
     insights.push({
       icon: '📋', title: 'מוצרים ללא ספירת מלאי (' + noCountProds.length + ')',
       bg: 'var(--accent-lt)', border: 'var(--accent)', color: 'var(--accent)',
-      body: noCountProds.slice(0,4).map(p => '• ' + esc(p.name)).join('<br>') + (noCountProds.length>4 ? '<br>ועוד ' + (noCountProds.length-4) + '...' : ''),
+      body: noCountProds.slice(0,4).map(p => '• ' + esc(p.name) + (p.details && Object.keys(p.details).length ? ' <span style="font-size:.74rem;color:var(--fg3)">(' + Object.entries(p.details).map(([k,v])=>k+': '+v).join(', ') + ')</span>' : '')).join('<br>') + (noCountProds.length>4 ? '<br>ועוד ' + (noCountProds.length-4) + '...' : ''),
       reason: 'לא הוזנה ספירת פתיחה למוצרים אלה — ללא ספירה, המערכת לא יכולה לחשב מלאי ומכירות מדויקים.'
     });
   }
