@@ -1119,13 +1119,22 @@ function renderDashboard() {
   const hebTo = to ? fmtHebrewDate(to) : '';
   const rangeEl = document.getElementById('dash-range-section');
   if (rangeEl) {
-    rangeEl.innerHTML =
-      '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">' +
-      '<span style="font-size:.85rem;color:var(--fg2);font-weight:600">📊 מכירות בטווח:</span>' +
-      '<label style="font-size:.82rem;color:var(--fg3)">מ: <input type="date" id="dash-range-from" value="' + (from||'') + '" onchange="dashRangeChange()" style="border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--surface1);color:var(--fg1);font-size:.82rem"></label>' +
-      '<label style="font-size:.82rem;color:var(--fg3)">עד: <input type="date" id="dash-range-to" value="' + (to||'') + '" onchange="dashRangeChange()" style="border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--surface1);color:var(--fg1);font-size:.82rem"></label>' +
-      (hebFrom ? '<span style="font-size:.76rem;color:var(--fg3)">' + hebFrom + ' — ' + (hebTo||'') + '</span>' : '') +
-      '</div>';
+    // בנה את ה-inputs רק פעם ראשונה — אחרת רק עדכן ערכים כדי לא לאבד focus
+    if (!document.getElementById('dash-range-from')) {
+      rangeEl.innerHTML =
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">' +
+        '<span style="font-size:.85rem;color:var(--fg2);font-weight:600">📊 מכירות בטווח:</span>' +
+        '<label style="font-size:.82rem;color:var(--fg3)">מ: <input type="date" id="dash-range-from" onchange="dashRangeChange()" style="border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--surface);color:var(--fg);font-size:.82rem"></label>' +
+        '<label style="font-size:.82rem;color:var(--fg3)">עד: <input type="date" id="dash-range-to" onchange="dashRangeChange()" style="border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--surface);color:var(--fg);font-size:.82rem"></label>' +
+        '<span id="dash-range-heb" style="font-size:.76rem;color:var(--fg3)"></span>' +
+        '</div>';
+    }
+    const fromEl2 = document.getElementById('dash-range-from');
+    const toEl2 = document.getElementById('dash-range-to');
+    if (fromEl2 && document.activeElement !== fromEl2) fromEl2.value = from || '';
+    if (toEl2 && document.activeElement !== toEl2) toEl2.value = to || '';
+    const hebSpan = document.getElementById('dash-range-heb');
+    if (hebSpan) hebSpan.textContent = hebFrom ? hebFrom + ' — ' + (hebTo||'') : '';
   }
 
   // חישוב מכירות בטווח לכל מוצר
