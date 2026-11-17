@@ -353,9 +353,20 @@ tr:hover td { background: var(--surface2); }
         <input type="date" id="sup-to" onchange="renderSupply()">
         <button class="btn-sm btn-primary" onclick="openSupplyModal()">+ אספקה חדשה</button>
       </div>
+      <!-- toolbar בחירה מרובה אספקות -->
+      <div id="sup-bulk-bar" style="display:none;background:var(--accent-lt);border:1px solid var(--accent);border-radius:var(--rs);padding:8px 14px;margin-bottom:8px;display:none;align-items:center;gap:10px;flex-wrap:wrap">
+        <span id="sup-bulk-count" style="font-size:.84rem;font-weight:700;color:var(--accent)"></span>
+        <button class="btn-sm" onclick="supBulkUpdateDate()">📅 עדכן תאריך</button>
+        <button class="btn-sm" onclick="supBulkUpdateQty()">🔢 עדכן כמות</button>
+        <button class="btn-sm btn-danger" onclick="supBulkDelete()">🗑️ מחק נבחרים</button>
+        <button class="btn-sm" onclick="supClearSelection()" style="margin-right:auto">✕ בטל בחירה</button>
+      </div>
       <div class="card"><div class="tbl-wrap">
         <table>
-          <thead><tr><th>תאריך</th><th>מוצר</th><th>קטגוריה</th><th>כמות</th><th>מחיר</th><th>ספק</th><th>הערות</th><th>פעולות</th></tr></thead>
+          <thead><tr>
+            <th style="width:34px"><input type="checkbox" id="sup-check-all" onchange="supToggleAll(this.checked)" title="בחר הכל"></th>
+            <th>תאריך</th><th>מוצר</th><th>קטגוריה</th><th>כמות</th><th>מחיר</th><th>ספק</th><th>הערות</th><th>פעולות</th>
+          </tr></thead>
           <tbody id="sup-tbody"></tbody>
         </table>
       </div></div>
@@ -369,9 +380,20 @@ tr:hover td { background: var(--surface2); }
         <select id="cnt-date-filter" onchange="renderCounts()"><option value="">כל התאריכים</option></select>
         <button class="btn-sm btn-primary" onclick="openCountModal()">+ ספירה חדשה</button>
       </div>
+      <!-- toolbar בחירה מרובה ספירות -->
+      <div id="cnt-bulk-bar" style="display:none;background:var(--accent-lt);border:1px solid var(--accent);border-radius:var(--rs);padding:8px 14px;margin-bottom:8px;align-items:center;gap:10px;flex-wrap:wrap">
+        <span id="cnt-bulk-count" style="font-size:.84rem;font-weight:700;color:var(--accent)"></span>
+        <button class="btn-sm" onclick="cntBulkUpdateDate()">📅 עדכן תאריך</button>
+        <button class="btn-sm" onclick="cntBulkUpdateQty()">🔢 עדכן כמות</button>
+        <button class="btn-sm btn-danger" onclick="cntBulkDelete()">🗑️ מחק נבחרים</button>
+        <button class="btn-sm" onclick="cntClearSelection()" style="margin-right:auto">✕ בטל בחירה</button>
+      </div>
       <div class="card"><div class="tbl-wrap">
         <table>
-          <thead><tr><th>תאריך</th><th>מוצר</th><th>קטגוריה</th><th>כמות</th><th>הערות</th><th>פעולות</th></tr></thead>
+          <thead><tr>
+            <th style="width:34px"><input type="checkbox" id="cnt-check-all" onchange="cntToggleAll(this.checked)" title="בחר הכל"></th>
+            <th>תאריך</th><th>מוצר</th><th>קטגוריה</th><th>כמות</th><th>הערות</th><th>פעולות</th>
+          </tr></thead>
           <tbody id="cnt-tbody"></tbody>
         </table>
       </div></div>
@@ -461,8 +483,8 @@ tr:hover td { background: var(--surface2); }
     <input type="hidden" id="prod-id">
     <div class="form-group"><label>שם מוצר *</label><input id="prod-name"></div>
     <div class="form-group"><label>ברקוד</label><input id="prod-barcode"></div>
-    <div class="form-group"><label>קטגוריה</label><select id="prod-cat"></select></div>
-    <div class="form-group"><label>תת-קטגוריה</label><select id="prod-subcat"></select></div>
+    <div class="form-group"><label>קטגוריה *</label><select id="prod-cat"></select></div>
+    <div class="form-group"><label>תת-קטגוריה *</label><select id="prod-subcat"></select></div>
     <!-- שדות פרטים דינמיים לפי תת-קטגוריה -->
     <div id="prod-details-fields"></div>
     <div class="form-group"><label>ספק</label><select id="prod-vendor"></select></div>
@@ -490,6 +512,11 @@ tr:hover td { background: var(--surface2); }
     <div class="modal-title" id="sup-modal-title">אספקה חדשה</div>
     <input type="hidden" id="sup-id">
     <div class="form-group"><label>תאריך *</label><input type="date" id="sup-date"></div>
+    <!-- פילטר קטגוריה/תת-קטגוריה (לא חובה) -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px">
+      <div class="form-group" style="margin:0"><label>קטגוריה <span style="color:var(--fg3);font-weight:400">(סינון)</span></label><select id="sup-filter-cat" onchange="onSupFilterCatChange()"><option value="">הכל</option></select></div>
+      <div class="form-group" style="margin:0"><label>תת-קטגוריה <span style="color:var(--fg3);font-weight:400">(סינון)</span></label><select id="sup-filter-subcat" onchange="onSupFilterChange()"><option value="">הכל</option></select></div>
+    </div>
     <div class="form-group"><label>מוצר *</label><select id="sup-product"></select></div>
     <div id="sup-details-fields"></div>
     <div class="form-group"><label>כמות *</label><input type="number" id="sup-qty" min="0"></div>
@@ -508,6 +535,11 @@ tr:hover td { background: var(--surface2); }
     <div class="modal-title" id="cnt-modal-title">ספירת מלאי</div>
     <input type="hidden" id="cnt-id">
     <div class="form-group"><label>תאריך *</label><input type="date" id="cnt-date"></div>
+    <!-- פילטר קטגוריה/תת-קטגוריה (לא חובה) -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px">
+      <div class="form-group" style="margin:0"><label>קטגוריה <span style="color:var(--fg3);font-weight:400">(סינון)</span></label><select id="cnt-filter-cat" onchange="onCntFilterCatChange()"><option value="">הכל</option></select></div>
+      <div class="form-group" style="margin:0"><label>תת-קטגוריה <span style="color:var(--fg3);font-weight:400">(סינון)</span></label><select id="cnt-filter-subcat" onchange="onCntFilterChange()"><option value="">הכל</option></select></div>
+    </div>
     <div class="form-group"><label>מוצר *</label><select id="cnt-product"></select></div>
     <div id="cnt-details-fields"></div>
     <div class="form-group"><label>כמות *</label><input type="number" id="cnt-count" min="0"></div>
@@ -1350,15 +1382,24 @@ function openProductModal(id) {
   document.getElementById('prod-notes').value = p?.notes || '';
   document.getElementById('prod-active').checked = p ? (p.is_active !== false) : true;
   const catSel = document.getElementById('prod-cat');
-  catSel.innerHTML = '<option value="">ללא קטגוריה</option>' + categories.map(c => '<option value="' + c.id + '"' + (c.id===p?.category_id?' selected':'') + '>' + esc(c.name) + '</option>').join('');
+  // הגבל קטגוריות לפי הרשאות — אם למשתמש יש allowed_categories ואין לו הרשאה לשנות
+  const allowedCats = currentDbUser?.allowed_categories;
+  const visibleCats = (allowedCats && Array.isArray(allowedCats) && allowedCats.length > 0)
+    ? categories.filter(c => allowedCats.includes(c.id))
+    : categories;
+  // בעריכה — אם הקטגוריה הנוכחית לא בהרשאות, נשמור אותה כ-disabled
+  const existingCatLocked = p?.category_id && !visibleCats.find(c => c.id === p.category_id);
+  catSel.innerHTML = '<option value="">-- בחר קטגוריה --</option>' +
+    visibleCats.map(c => '<option value="' + c.id + '"' + (c.id===p?.category_id?' selected':'') + '>' + esc(c.name) + '</option>').join('') +
+    (existingCatLocked ? '<option value="' + p.category_id + '" selected disabled>🔒 ' + esc(getCat(p.category_id)?.name||'?') + ' (ללא הרשאה)</option>' : '');
   const subSel = document.getElementById('prod-subcat');
   const subs = subcategories.filter(s => s.category_id === (p?.category_id || catSel.value));
-  subSel.innerHTML = '<option value="">ללא תת-קטגוריה</option>' + subs.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
+  subSel.innerHTML = '<option value="">-- בחר תת-קטגוריה --</option>' + subs.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
   // הגדר ערך מפורש — חשוב! בלי זה selected attribute לא תמיד עובד
   subSel.value = p?.subcategory_id || '';
   catSel.onchange = () => {
     const ss = subcategories.filter(s => s.category_id === catSel.value);
-    subSel.innerHTML = '<option value="">ללא תת-קטגוריה</option>' + ss.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
+    subSel.innerHTML = '<option value="">-- בחר תת-קטגוריה --</option>' + ss.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
     subSel.value = '';
     onProdSubcatChange();
   };
@@ -1375,6 +1416,10 @@ async function saveProduct() {
   const id = document.getElementById('prod-id').value;
   const name = document.getElementById('prod-name').value.trim();
   if (!name) { alert('נא להזין שם מוצר'); return; }
+  const catId = document.getElementById('prod-cat').value;
+  const subcatId = document.getElementById('prod-subcat').value;
+  if (!catId) { alert('נא לבחור קטגוריה'); return; }
+  if (!subcatId) { alert('נא לבחור תת-קטגוריה'); return; }
 
   // איסוף פרטים דינמיים
   const detailFields = document.querySelectorAll('#prod-details-fields [data-detail]');
@@ -1437,15 +1482,139 @@ function renderSupply() {
     }
     return true;
   });
+  const checkAll = document.getElementById('sup-check-all');
+  if (checkAll) checkAll.checked = false;
+  document.getElementById('sup-bulk-bar').style.display = 'none';
   document.getElementById('sup-tbody').innerHTML = list.length ? list.map(s => {
     const p = getProduct(s.product_id), v = getVendor(s.supplier_id);
-    return '<tr><td>' + fmtDate(s.date) + '</td>' +
+    return '<tr data-id="' + s.id + '">' +
+      '<td><input type="checkbox" class="sup-row-check" data-id="' + s.id + '" onchange="supOnCheckChange()"></td>' +
+      '<td>' + fmtDate(s.date) + '</td>' +
       '<td><strong>' + esc(p?.name||'—') + '</strong>' + (p ? '<div style="margin-top:2px">' + detailBadges(p) + '</div>' : '') + '</td>' +
       '<td>' + catBadge(p?.category_id) + '</td>' +
       '<td class="tbl-num">' + s.qty + '</td><td class="tbl-num">' + fmtMoney(s.price) + '</td>' +
       '<td style="font-size:.8rem">' + esc(v?.name||'—') + '</td><td style="font-size:.8rem;color:var(--fg3)">' + esc(s.notes||'—') + '</td>' +
       '<td><button class="btn-sm" onclick="editSupply(\'' + s.id + '\')">עריכה</button> <button class="btn-sm btn-danger" onclick="deleteSupply(\'' + s.id + '\')">מחק</button></td></tr>';
-  }).join('') : '<tr><td colspan="8"><div class="empty">אין אספקות</div></td></tr>';
+  }).join('') : '<tr><td colspan="9"><div class="empty">אין אספקות</div></td></tr>';
+}
+
+// ── בחירת שורות — אספקות ──
+function supGetSelected() {
+  return [...document.querySelectorAll('.sup-row-check:checked')].map(el => el.getAttribute('data-id'));
+}
+function supOnCheckChange() {
+  const sel = supGetSelected();
+  const bar = document.getElementById('sup-bulk-bar');
+  bar.style.display = sel.length ? 'flex' : 'none';
+  document.getElementById('sup-bulk-count').textContent = sel.length + ' שורות נבחרו';
+  const all = document.querySelectorAll('.sup-row-check');
+  document.getElementById('sup-check-all').checked = all.length > 0 && sel.length === all.length;
+}
+function supToggleAll(checked) {
+  document.querySelectorAll('.sup-row-check').forEach(el => { el.checked = checked; });
+  supOnCheckChange();
+}
+function supClearSelection() {
+  document.querySelectorAll('.sup-row-check').forEach(el => { el.checked = false; });
+  document.getElementById('sup-check-all').checked = false;
+  document.getElementById('sup-bulk-bar').style.display = 'none';
+}
+async function supBulkDelete() {
+  const ids = supGetSelected();
+  if (!ids.length) return;
+  if (!confirm('למחוק ' + ids.length + ' אספקות נבחרות?')) return;
+  for (const id of ids) {
+    await sb('supply?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  }
+  supply = supply.filter(s => !ids.includes(s.id));
+  renderSupply(); renderDashboard();
+}
+async function supBulkUpdateDate() {
+  const ids = supGetSelected();
+  if (!ids.length) return;
+  const newDate = prompt('הזן תאריך חדש (YYYY-MM-DD) עבור ' + ids.length + ' שורות:');
+  if (!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) { alert('תאריך לא תקין'); return; }
+  for (const id of ids) {
+    await sb('supply?id=eq.' + id, { method: 'PATCH', body: { date: newDate }, prefer: 'return=minimal' });
+    const idx = supply.findIndex(s => s.id === id);
+    if (idx >= 0) supply[idx] = { ...supply[idx], date: newDate };
+  }
+  renderSupply(); renderDashboard();
+}
+async function supBulkUpdateQty() {
+  const ids = supGetSelected();
+  if (!ids.length) return;
+  const val = prompt('הזן כמות חדשה עבור ' + ids.length + ' שורות:');
+  const qty = parseFloat(val);
+  if (isNaN(qty) || qty < 0) { alert('כמות לא תקינה'); return; }
+  for (const id of ids) {
+    await sb('supply?id=eq.' + id, { method: 'PATCH', body: { qty }, prefer: 'return=minimal' });
+    const idx = supply.findIndex(s => s.id === id);
+    if (idx >= 0) supply[idx] = { ...supply[idx], qty };
+  }
+  renderSupply(); renderDashboard();
+}
+
+function _buildModalCatFilter(catSelId, subcatSelId, filterFn) {
+  const catSel = document.getElementById(catSelId);
+  if (!catSel) return;
+  catSel.innerHTML = '<option value="">הכל</option>' + categories.map(c =>
+    '<option value="' + c.id + '">' + esc(c.name) + '</option>'
+  ).join('');
+  catSel.value = '';
+  const subcatSel = document.getElementById(subcatSelId);
+  if (subcatSel) { subcatSel.innerHTML = '<option value="">הכל</option>'; subcatSel.value = ''; }
+}
+
+function _filterProductsForModal(prodSelId, catSelId, subcatSelId, currentProdId) {
+  const catVal = document.getElementById(catSelId)?.value || '';
+  const subcatVal = document.getElementById(subcatSelId)?.value || '';
+  let filtered = products;
+  if (catVal) filtered = filtered.filter(p => p.category_id === catVal);
+  if (subcatVal) filtered = filtered.filter(p => p.subcategory_id === subcatVal);
+  const prodSel = document.getElementById(prodSelId);
+  if (!prodSel) return;
+  prodSel.innerHTML = '<option value="">בחר מוצר...</option>' + filtered.map(p =>
+    '<option value="' + p.id + '"' + (p.id===currentProdId?' selected':'') + '>' + esc(p.name) + '</option>'
+  ).join('');
+  if (currentProdId && filtered.find(p => p.id === currentProdId)) prodSel.value = currentProdId;
+  else if (currentProdId) {
+    // מוצר קיים שלא בפילטר — הוסף אותו
+    const existing = getProduct(currentProdId);
+    if (existing) prodSel.innerHTML += '<option value="' + currentProdId + '" selected>' + esc(existing.name) + '</option>';
+    prodSel.value = currentProdId;
+  }
+}
+
+function onSupFilterCatChange() {
+  const catVal = document.getElementById('sup-filter-cat').value;
+  const subcatSel = document.getElementById('sup-filter-subcat');
+  const subs = catVal ? subcategories.filter(s => s.category_id === catVal) : [];
+  subcatSel.innerHTML = '<option value="">הכל</option>' + subs.map(s =>
+    '<option value="' + s.id + '">' + esc(s.name) + '</option>'
+  ).join('');
+  subcatSel.value = '';
+  _filterProductsForModal('sup-product', 'sup-filter-cat', 'sup-filter-subcat',
+    document.getElementById('sup-product').value);
+}
+function onSupFilterChange() {
+  _filterProductsForModal('sup-product', 'sup-filter-cat', 'sup-filter-subcat',
+    document.getElementById('sup-product').value);
+}
+function onCntFilterCatChange() {
+  const catVal = document.getElementById('cnt-filter-cat').value;
+  const subcatSel = document.getElementById('cnt-filter-subcat');
+  const subs = catVal ? subcategories.filter(s => s.category_id === catVal) : [];
+  subcatSel.innerHTML = '<option value="">הכל</option>' + subs.map(s =>
+    '<option value="' + s.id + '">' + esc(s.name) + '</option>'
+  ).join('');
+  subcatSel.value = '';
+  _filterProductsForModal('cnt-product', 'cnt-filter-cat', 'cnt-filter-subcat',
+    document.getElementById('cnt-product').value);
+}
+function onCntFilterChange() {
+  _filterProductsForModal('cnt-product', 'cnt-filter-cat', 'cnt-filter-subcat',
+    document.getElementById('cnt-product').value);
 }
 
 function openSupplyModal(id) {
@@ -1456,9 +1625,21 @@ function openSupplyModal(id) {
   document.getElementById('sup-qty').value = s?.qty || '';
   document.getElementById('sup-price').value = s?.price || '';
   document.getElementById('sup-notes').value = s?.notes || '';
+  // אתחל פילטרי קטגוריה
+  _buildModalCatFilter('sup-filter-cat', 'sup-filter-subcat');
+  // אם עריכה — סנן לפי קטגוריית המוצר
+  if (s?.product_id) {
+    const sp = getProduct(s.product_id);
+    if (sp?.category_id) {
+      document.getElementById('sup-filter-cat').value = sp.category_id;
+      onSupFilterCatChange();
+      if (sp?.subcategory_id) {
+        document.getElementById('sup-filter-subcat').value = sp.subcategory_id;
+      }
+    }
+  }
+  _filterProductsForModal('sup-product', 'sup-filter-cat', 'sup-filter-subcat', s?.product_id || '');
   const supProdSel = document.getElementById('sup-product');
-  supProdSel.innerHTML = '<option value="">בחר מוצר...</option>' + products.map(p => '<option value="' + p.id + '"' + (p.id===s?.product_id?' selected':'') + '>' + esc(p.name) + '</option>').join('');
-  supProdSel.value = s?.product_id || '';
   supProdSel.onchange = () => onSupProductChange();
   document.getElementById('sup-vendor').innerHTML = '<option value="">ללא ספק</option>' + suppliers.map(v => '<option value="' + v.id + '"' + (v.id===s?.supplier_id?' selected':'') + '>' + esc(v.name) + '</option>').join('');
   onSupProductChange(s);
@@ -1545,15 +1726,77 @@ function renderCounts() {
   if (cur && !dates.includes(cur)) sel.value = '';
   const df = sel.value;
   let list = counts.filter(c => !df || c.date === df);
+  const cntCheckAll = document.getElementById('cnt-check-all');
+  if (cntCheckAll) cntCheckAll.checked = false;
+  document.getElementById('cnt-bulk-bar').style.display = 'none';
   document.getElementById('cnt-tbody').innerHTML = list.length ? list.map(c => {
     const p = getProduct(c.product_id);
-    return '<tr><td>' + fmtDate(c.date) + '</td>' +
+    return '<tr data-id="' + c.id + '">' +
+      '<td><input type="checkbox" class="cnt-row-check" data-id="' + c.id + '" onchange="cntOnCheckChange()"></td>' +
+      '<td>' + fmtDate(c.date) + '</td>' +
       '<td><strong>' + esc(p?.name||'—') + '</strong>' + (p ? '<div style="margin-top:2px">' + detailBadges(p) + '</div>' : '') + '</td>' +
       '<td>' + catBadge(p?.category_id) + '</td>' +
       '<td class="tbl-num" style="font-weight:700">' + c.count + '</td>' +
       '<td style="font-size:.8rem;color:var(--fg3)">' + esc(c.notes||'—') + '</td>' +
       '<td><button class="btn-sm" onclick="editCount(\'' + c.id + '\')">עריכה</button> <button class="btn-sm btn-danger" onclick="deleteCount(\'' + c.id + '\')">מחק</button></td></tr>';
-  }).join('') : '<tr><td colspan="6"><div class="empty">אין ספירות</div></td></tr>';
+  }).join('') : '<tr><td colspan="7"><div class="empty">אין ספירות</div></td></tr>';
+}
+
+// ── בחירת שורות — ספירות ──
+function cntGetSelected() {
+  return [...document.querySelectorAll('.cnt-row-check:checked')].map(el => el.getAttribute('data-id'));
+}
+function cntOnCheckChange() {
+  const sel = cntGetSelected();
+  const bar = document.getElementById('cnt-bulk-bar');
+  bar.style.display = sel.length ? 'flex' : 'none';
+  document.getElementById('cnt-bulk-count').textContent = sel.length + ' שורות נבחרו';
+  const all = document.querySelectorAll('.cnt-row-check');
+  document.getElementById('cnt-check-all').checked = all.length > 0 && sel.length === all.length;
+}
+function cntToggleAll(checked) {
+  document.querySelectorAll('.cnt-row-check').forEach(el => { el.checked = checked; });
+  cntOnCheckChange();
+}
+function cntClearSelection() {
+  document.querySelectorAll('.cnt-row-check').forEach(el => { el.checked = false; });
+  document.getElementById('cnt-check-all').checked = false;
+  document.getElementById('cnt-bulk-bar').style.display = 'none';
+}
+async function cntBulkDelete() {
+  const ids = cntGetSelected();
+  if (!ids.length) return;
+  if (!confirm('למחוק ' + ids.length + ' ספירות נבחרות?')) return;
+  for (const id of ids) {
+    await sb('counts?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  }
+  counts = counts.filter(c => !ids.includes(c.id));
+  renderCounts(); renderDashboard();
+}
+async function cntBulkUpdateDate() {
+  const ids = cntGetSelected();
+  if (!ids.length) return;
+  const newDate = prompt('הזן תאריך חדש (YYYY-MM-DD) עבור ' + ids.length + ' שורות:');
+  if (!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) { alert('תאריך לא תקין'); return; }
+  for (const id of ids) {
+    await sb('counts?id=eq.' + id, { method: 'PATCH', body: { date: newDate }, prefer: 'return=minimal' });
+    const idx = counts.findIndex(c => c.id === id);
+    if (idx >= 0) counts[idx] = { ...counts[idx], date: newDate };
+  }
+  renderCounts(); renderDashboard();
+}
+async function cntBulkUpdateQty() {
+  const ids = cntGetSelected();
+  if (!ids.length) return;
+  const val = prompt('הזן כמות חדשה עבור ' + ids.length + ' שורות:');
+  const count = parseFloat(val);
+  if (isNaN(count) || count < 0) { alert('כמות לא תקינה'); return; }
+  for (const id of ids) {
+    await sb('counts?id=eq.' + id, { method: 'PATCH', body: { count }, prefer: 'return=minimal' });
+    const idx = counts.findIndex(c => c.id === id);
+    if (idx >= 0) counts[idx] = { ...counts[idx], count };
+  }
+  renderCounts(); renderDashboard();
 }
 
 function openCountModal(id) {
@@ -1563,9 +1806,18 @@ function openCountModal(id) {
   document.getElementById('cnt-date').value = c?.date || today();
   document.getElementById('cnt-count').value = c?.count || '';
   document.getElementById('cnt-notes').value = c?.notes || '';
+  // אתחל פילטרי קטגוריה
+  _buildModalCatFilter('cnt-filter-cat', 'cnt-filter-subcat');
+  if (c?.product_id) {
+    const cp = getProduct(c.product_id);
+    if (cp?.category_id) {
+      document.getElementById('cnt-filter-cat').value = cp.category_id;
+      onCntFilterCatChange();
+      if (cp?.subcategory_id) document.getElementById('cnt-filter-subcat').value = cp.subcategory_id;
+    }
+  }
+  _filterProductsForModal('cnt-product', 'cnt-filter-cat', 'cnt-filter-subcat', c?.product_id || '');
   const prodSel = document.getElementById('cnt-product');
-  prodSel.innerHTML = '<option value="">בחר מוצר...</option>' + products.map(p => '<option value="' + p.id + '"' + (p.id===c?.product_id?' selected':'') + '>' + esc(p.name) + '</option>').join('');
-  prodSel.value = c?.product_id || '';
   prodSel.onchange = () => onCntProductChange();
   onCntProductChange(c);
   document.getElementById('modal-count').classList.add('open');
