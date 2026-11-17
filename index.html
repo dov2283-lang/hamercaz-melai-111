@@ -225,6 +225,17 @@ tr:hover td { background: var(--surface2); }
 
 /* ── PERM CHECKBOXES ── */
 .perm-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:6px; margin-top:8px; }
+.perm-section { margin-bottom:16px; }
+.perm-section-title { font-size:.82rem; font-weight:700; color:var(--fg); margin-bottom:8px; padding-bottom:4px; border-bottom:1px solid var(--border); }
+.perm-radio-group { display:flex; flex-direction:column; gap:6px; }
+.perm-radio { display:flex; align-items:flex-start; gap:10px; padding:8px 10px; border:1.5px solid var(--border); border-radius:var(--rs); cursor:pointer; transition:border-color .15s,background .15s; }
+.perm-radio:hover { border-color:var(--accent); background:var(--accent-lt); }
+.perm-radio input[type=radio] { margin-top:3px; accent-color:var(--accent); flex-shrink:0; }
+.perm-radio input[type=radio]:checked ~ .perm-radio-body .perm-radio-title { color:var(--accent); }
+.perm-radio:has(input:checked) { border-color:var(--accent); background:var(--accent-lt); }
+.perm-radio-body { flex:1; }
+.perm-radio-title { font-size:.84rem; font-weight:600; color:var(--fg); line-height:1.3; }
+.perm-radio-desc { font-size:.76rem; color:var(--fg2); margin-top:2px; line-height:1.4; }
 .perm-item { display:flex; align-items:center; gap:7px; padding:7px 10px; background:var(--surface2); border-radius:var(--rs); font-size:.84rem; cursor:pointer; }
 .perm-item input[type=checkbox] { accent-color:var(--accent); width:15px; height:15px; }
 </style>
@@ -594,28 +605,96 @@ tr:hover td { background: var(--surface2); }
 </div>
 
 <div class="modal-backdrop" id="modal-invite">
-  <div class="modal" style="max-width:520px">
-    <div class="modal-title" id="invite-modal-title">הזמנת משתמש חדש</div>
+  <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
+    <div class="modal-title" id="invite-modal-title">הזמנת משתמש</div>
     <input type="hidden" id="invite-user-id">
-    <div class="form-group"><label>אימייל *</label><input type="email" id="invite-email" placeholder="user@example.com"></div>
-    <div class="form-group"><label>שם מלא *</label><input id="invite-name"></div>
-    <div class="form-group"><label>תפקיד</label>
-      <select id="invite-role">
-        <option value="user">משתמש רגיל</option>
-        <option value="manager">מנהל</option>
-      </select>
+
+    <!-- סוג הזמנה — מוצג רק ביצירה -->
+    <div id="invite-type-section" class="perm-section">
+      <div class="perm-section-title">📋 סוג ההזמנה</div>
+      <div class="perm-radio-group">
+        <label class="perm-radio" id="invite-type-share-lbl">
+          <input type="radio" name="invite-type" id="invite-type-share" value="share" onchange="onInviteTypeChange()" checked>
+          <div class="perm-radio-body">
+            <div class="perm-radio-title">👥 שיתוף במערכת הנוכחית</div>
+            <div class="perm-radio-desc">המשתמש יצטרף לצפות/לערוך את המערכת שלך, בהתאם להרשאות שתגדיר</div>
+          </div>
+        </label>
+        <label class="perm-radio" id="invite-type-new-lbl">
+          <input type="radio" name="invite-type" id="invite-type-new" value="new_system" onchange="onInviteTypeChange()">
+          <div class="perm-radio-body">
+            <div class="perm-radio-title">🆕 פתיחת מערכת חדשה</div>
+            <div class="perm-radio-desc">המשתמש יקבל מערכת מלאי עצמאית משלו — ייפתח לו חשבון חדש</div>
+          </div>
+        </label>
+      </div>
     </div>
+
+    <!-- פרטי משתמש -->
+    <div class="perm-section">
+      <div class="perm-section-title">👤 פרטי המשתמש</div>
+      <div class="form-group"><label>אימייל *</label><input type="email" id="invite-email" placeholder="user@example.com"></div>
+      <div class="form-group"><label>שם מלא *</label><input id="invite-name"></div>
+    </div>
+
+    <!-- הרשאות — מוצג רק בשיתוף -->
     <div id="invite-perms-section">
-      <div class="details-section-title">🔐 הרשאות קטגוריות</div>
-      <label style="font-size:.82rem;color:var(--fg2);display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer">
-        <input type="checkbox" id="invite-all-cats" onchange="toggleInviteAllCats()" checked> גישה לכל הקטגוריות
-      </label>
-      <div id="invite-cats-grid" class="perm-grid" style="display:none"></div>
-      <div style="margin-top:10px;font-size:.82rem;color:var(--fg2)">הרשאות עריכה:</div>
-      <label style="font-size:.82rem;color:var(--fg2);display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer">
-        <input type="checkbox" id="invite-can-edit" checked> יכול להוסיף/לערוך רשומות
-      </label>
+      <div class="perm-section">
+        <div class="perm-section-title">🔐 רמת גישה</div>
+        <div class="perm-radio-group">
+          <label class="perm-radio">
+            <input type="radio" name="invite-access" id="invite-access-edit" value="edit" onchange="onInviteAccessChange()" checked>
+            <div class="perm-radio-body">
+              <div class="perm-radio-title">✏️ עריכה מלאה</div>
+              <div class="perm-radio-desc">יכול להוסיף/לערוך/למחוק רשומות (מוצרים, ספירות, אספקות)</div>
+            </div>
+          </label>
+          <label class="perm-radio">
+            <input type="radio" name="invite-access" id="invite-access-view" value="view" onchange="onInviteAccessChange()">
+            <div class="perm-radio-body">
+              <div class="perm-radio-title">👁️ צפייה בלבד</div>
+              <div class="perm-radio-desc">רואה את הנתונים ודוחות אך לא יכול לשנות</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="perm-section" id="invite-struct-section">
+        <div class="perm-section-title">🗂️ הרשאות מבנה (קטגוריות)</div>
+        <div class="perm-radio-group">
+          <label class="perm-radio">
+            <input type="radio" name="invite-struct" id="invite-struct-none" value="none" checked>
+            <div class="perm-radio-body">
+              <div class="perm-radio-title">🔒 ללא הרשאת מבנה</div>
+              <div class="perm-radio-desc">לא יכול להוסיף/לערוך קטגוריות או תת-קטגוריות</div>
+            </div>
+          </label>
+          <label class="perm-radio">
+            <input type="radio" name="invite-struct" id="invite-struct-subcat" value="subcat">
+            <div class="perm-radio-body">
+              <div class="perm-radio-title">📁 תת-קטגוריות בלבד</div>
+              <div class="perm-radio-desc">יכול להוסיף תת-קטגוריות לתוך קטגוריות קיימות, לא ליצור קטגוריות חדשות</div>
+            </div>
+          </label>
+          <label class="perm-radio">
+            <input type="radio" name="invite-struct" id="invite-struct-all" value="all">
+            <div class="perm-radio-body">
+              <div class="perm-radio-title">🗂️ קטגוריות ותת-קטגוריות</div>
+              <div class="perm-radio-desc">הרשאה מלאה ליצירה ועריכה של קטגוריות ותת-קטגוריות</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="perm-section">
+        <div class="perm-section-title">📂 גישה לקטגוריות</div>
+        <label style="font-size:.82rem;color:var(--fg2);display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" id="invite-all-cats" onchange="toggleInviteAllCats()" checked> גישה לכל הקטגוריות
+        </label>
+        <div id="invite-cats-grid" class="perm-grid" style="display:none"></div>
+      </div>
     </div>
+
     <div class="auth-err" id="invite-err"></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-invite')">ביטול</button>
@@ -723,6 +802,14 @@ async function sbAuth(action, body) {
 // ══════════════════════════════════════════
 let currentSession = null, currentUser = null, currentDbUser = null;
 let categories = [], subcategories = [], suppliers = [], products = [], supply = [], counts = [];
+
+// ══════════════════════════════════════════
+//  פונקציות הרשאות
+// ══════════════════════════════════════════
+function isOwner() { return currentDbUser?.role === 'owner'; }
+function userCanEdit() { return isOwner() || currentDbUser?.can_edit !== false; }
+function userCanAddCategories() { return isOwner() || currentDbUser?.can_add_categories === true; }
+function userCanAddSubcategories() { return isOwner() || currentDbUser?.can_add_categories === true || currentDbUser?.can_add_subcategories === true; }
 
 // ══════════════════════════════════════════
 //  AUTH
@@ -1932,16 +2019,22 @@ function printReport() {
 //  CATEGORIES
 // ══════════════════════════════════════════
 function renderCategories() {
+  // הצג/הסתר כפתור "קטגוריה חדשה" לפי הרשאות
+  const addCatBtn = document.querySelector('#tab-categories .btn-primary');
+  if (addCatBtn) addCatBtn.style.display = userCanAddCategories() ? '' : 'none';
+
   let html = '';
   categories.forEach(cat => {
     const subs = subcategories.filter(s => s.category_id === cat.id);
     const catProds = products.filter(p => p.category_id === cat.id);
+    const canAddSub = userCanAddSubcategories();
+    const canEdit = isOwner();
     html += '<div class="card" style="margin-bottom:12px"><div class="card-hd">' +
       '<span>' + esc(cat.name) + ' <span style="font-weight:400;color:var(--fg3);font-size:.8rem">(' + catProds.length + ' מוצרים)</span></span>' +
       '<div style="display:flex;gap:6px">' +
-      '<button class="btn-sm" onclick="openSubcatModal(\'' + cat.id + '\')">+ תת-קטגוריה</button>' +
-      '<button class="btn-sm" onclick="editCat(\'' + cat.id + '\')">עריכה</button>' +
-      '<button class="btn-sm btn-danger" onclick="deleteCat(\'' + cat.id + '\')">מחק</button>' +
+      (canAddSub ? '<button class="btn-sm" onclick="openSubcatModal(\'' + cat.id + '\')">+ תת-קטגוריה</button>' : '') +
+      (canEdit ? '<button class="btn-sm" onclick="editCat(\'' + cat.id + '\')">עריכה</button>' : '') +
+      (canEdit ? '<button class="btn-sm btn-danger" onclick="deleteCat(\'' + cat.id + '\')">מחק</button>' : '') +
       '</div></div>';
     if (subs.length) {
       html += '<div class="card-body" style="padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px">';
@@ -1954,8 +2047,8 @@ function renderCategories() {
         })();
         html += '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);padding:4px 10px;border-radius:20px;font-size:.82rem">' +
           '<span>' + esc(s.name) + (dts.length ? ' <span style="color:var(--accent);font-size:.7rem">[' + dts.map(d=>esc(d.label)).join(', ') + ']</span>' : '') + '</span>' +
-          '<button onclick="editSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--fg3);font-size:.8rem">✏️</button>' +
-          '<button onclick="deleteSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--err);font-size:.8rem">✕</button>' +
+          (canEdit ? '<button onclick="editSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--fg3);font-size:.8rem">✏️</button>' : '') +
+          (canEdit ? '<button onclick="deleteSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--err);font-size:.8rem">✕</button>' : '') +
           '</span>';
       });
       html += '</div>';
@@ -1966,6 +2059,8 @@ function renderCategories() {
 }
 
 function openCatModal(id) {
+  if (!id && !userCanAddCategories()) { alert('אין לך הרשאה ליצור קטגוריות חדשות'); return; }
+  if (id && !isOwner()) { alert('רק הבעלים יכול לערוך קטגוריות קיימות'); return; }
   const c = id ? getCat(id) : null;
   document.getElementById('cat-modal-title').textContent = c ? 'עריכת קטגוריה' : 'קטגוריה חדשה';
   document.getElementById('cat-id').value = id || '';
@@ -2119,6 +2214,8 @@ function dtDragEnd(e) {
 }
 
 function openSubcatModal(catId, id) {
+  if (!id && !userCanAddSubcategories()) { alert('אין לך הרשאה להוסיף תת-קטגוריות'); return; }
+  if (id && !isOwner()) { alert('רק הבעלים יכול לערוך תת-קטגוריות קיימות'); return; }
   const s = id ? getSubcat(id) : null;
   document.getElementById('subcat-modal-title').textContent = s ? 'עריכת תת-קטגוריה' : 'תת-קטגוריה חדשה';
   document.getElementById('subcat-id').value = id || '';
@@ -2234,7 +2331,6 @@ async function renderAdmin() {
   document.getElementById('users-list').innerHTML = '<div class="spinner">טוען...</div>';
   try {
     const rows = await sb('users?owner_id=eq.' + uid() + '&order=created_at.asc&select=*');
-    // הוסף את עצמנו אם לא קיים
     const allRows = rows.some(r => r.id === currentUser.id) ? rows : [currentDbUser, ...rows];
     document.getElementById('users-list').innerHTML = allRows.length ? allRows.map(u => {
       const allowedCats = u.allowed_categories;
@@ -2243,11 +2339,16 @@ async function renderAdmin() {
         : 'כל הקטגוריות';
       const roleLabel = u.role === 'owner' ? 'בעלים' : u.role === 'manager' ? 'מנהל' : 'משתמש';
       const roleCls = u.role === 'owner' ? 'role-owner' : 'role-user';
+      // הרשאות מבנה
+      let structBadge = '';
+      if (u.can_add_categories) structBadge = ' | 🗂️ קטגוריות';
+      else if (u.can_add_subcategories) structBadge = ' | 📁 תת-קטגוריות';
+      const editBadge = u.can_edit === false ? ' | 👁️ צפייה בלבד' : ' | ✏️ עריכה';
       return '<div class="user-row">' +
         '<div class="user-info">' +
           '<div class="user-name">' + esc(u.full_name||'—') + '</div>' +
           '<div class="user-email">' + esc(u.email) + '</div>' +
-          '<div style="font-size:.74rem;color:var(--fg3);margin-top:2px">📂 ' + esc(catNames) + (u.can_edit === false ? ' | 👁️ צפייה בלבד' : '') + '</div>' +
+          '<div style="font-size:.74rem;color:var(--fg3);margin-top:2px">📂 ' + esc(catNames) + editBadge + structBadge + '</div>' +
         '</div>' +
         '<span class="role-badge ' + roleCls + '">' + roleLabel + '</span>' +
         (u.id !== currentUser.id ? '<button class="btn-sm" onclick="openEditPermModal(\'' + u.id + '\')">הרשאות</button> <button class="btn-sm btn-danger" onclick="removeUser(\'' + u.id + '\')">הסר</button>' : '') +
@@ -2260,8 +2361,10 @@ async function renderAdmin() {
     const invites = await sb('user_invites?owner_id=eq.' + uid() + '&used=eq.false&order=created_at.desc&select=*');
     document.getElementById('invites-list').innerHTML = invites?.length ? invites.map(inv => {
       const link = location.origin + '/?invite=' + inv.token;
+      const typeLabel = inv.invite_type === 'new_system' ? '🆕 מערכת חדשה' : '👥 שיתוף';
       return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">' +
-        '<div style="flex:1"><div style="font-weight:600;font-size:.88rem">' + esc(inv.full_name) + '</div><div style="font-size:.78rem;color:var(--fg3)">' + esc(inv.email) + '</div></div>' +
+        '<div style="flex:1"><div style="font-weight:600;font-size:.88rem">' + esc(inv.full_name) + '</div>' +
+        '<div style="font-size:.78rem;color:var(--fg3)">' + esc(inv.email) + ' · ' + typeLabel + '</div></div>' +
         '<button class="btn-sm" onclick="copyText(\'' + link + '\')">העתק קישור</button>' +
         '<button class="btn-sm btn-danger" onclick="cancelInvite(\'' + inv.id + '\')">בטל</button>' +
         '</div>';
@@ -2274,30 +2377,61 @@ function toggleInviteAllCats() {
   document.getElementById('invite-cats-grid').style.display = checked ? 'none' : 'grid';
 }
 
+// עדכון תצוגה לפי סוג הזמנה
+function onInviteTypeChange() {
+  const isShare = document.getElementById('invite-type-share').checked;
+  document.getElementById('invite-perms-section').style.display = isShare ? '' : 'none';
+}
+
+// עדכון תצוגת מבנה לפי רמת גישה
+function onInviteAccessChange() {
+  const isView = document.getElementById('invite-access-view').checked;
+  document.getElementById('invite-struct-section').style.display = isView ? 'none' : '';
+}
+
+// קרא מה נבחר ברדיו עבור שם שדה
+function getRadioValue(name) {
+  const el = document.querySelector('input[name="' + name + '"]:checked');
+  return el ? el.value : null;
+}
+
 let _inviteMode = 'create'; // 'create' | 'edit'
 function inviteSubmitAction() {
   if (_inviteMode === 'edit') saveUserPerms();
   else createInvite();
 }
 
+function _buildCatsGrid(allowedCats) {
+  const hasAll = !allowedCats || (Array.isArray(allowedCats) && allowedCats.length === 0);
+  document.getElementById('invite-all-cats').checked = hasAll;
+  document.getElementById('invite-cats-grid').innerHTML = categories.map(c =>
+    '<label class="perm-item"><input type="checkbox" data-cat-id="' + c.id + '"' +
+    (hasAll || (allowedCats||[]).includes(c.id) ? ' checked' : '') + '> ' + esc(c.name) + '</label>'
+  ).join('');
+  document.getElementById('invite-cats-grid').style.display = hasAll ? 'none' : 'grid';
+}
+
 function openInviteModal() {
   _inviteMode = 'create';
-  document.getElementById('invite-modal-title').textContent = 'הזמנת משתמש חדש';
+  document.getElementById('invite-modal-title').textContent = 'הזמנת משתמש';
   document.getElementById('invite-submit-btn').textContent = 'שלח הזמנה';
   document.getElementById('invite-user-id').value = '';
   document.getElementById('invite-email').value = '';
   document.getElementById('invite-name').value = '';
-  document.getElementById('invite-role').value = 'user';
   document.getElementById('invite-err').textContent = '';
   document.getElementById('invite-link-box').style.display = 'none';
   document.getElementById('invite-submit-btn').style.display = '';
-  document.getElementById('invite-all-cats').checked = true;
-  document.getElementById('invite-can-edit').checked = true;
-  // בנה grid קטגוריות
-  document.getElementById('invite-cats-grid').innerHTML = categories.map(c =>
-    '<label class="perm-item"><input type="checkbox" data-cat-id="' + c.id + '" checked> ' + esc(c.name) + '</label>'
-  ).join('');
-  document.getElementById('invite-cats-grid').style.display = 'none';
+  // סוג הזמנה: הצג/הסתר
+  document.getElementById('invite-type-section').style.display = '';
+  document.getElementById('invite-type-share').checked = true;
+  document.getElementById('invite-perms-section').style.display = '';
+  // רמת גישה: ברירת מחדל — עריכה
+  document.getElementById('invite-access-edit').checked = true;
+  document.getElementById('invite-struct-section').style.display = '';
+  // מבנה: ברירת מחדל — ללא הרשאה
+  document.getElementById('invite-struct-none').checked = true;
+  // קטגוריות
+  _buildCatsGrid(null);
   document.getElementById('invite-email').disabled = false;
   document.getElementById('modal-invite').classList.add('open');
 }
@@ -2310,23 +2444,25 @@ function openEditPermModal(userId) {
   document.getElementById('invite-link-box').style.display = 'none';
   document.getElementById('invite-submit-btn').textContent = 'שמור הרשאות';
   document.getElementById('invite-submit-btn').style.display = '';
-  // נסה לטעון נתוני משתמש
+  // בעריכה — הסתר בחירת סוג הזמנה
+  document.getElementById('invite-type-section').style.display = 'none';
+  // טעון נתוני משתמש
   sb('users?id=eq.' + userId + '&select=*').then(rows => {
     const user = rows?.[0];
     if (!user) return;
     document.getElementById('invite-email').value = user.email;
     document.getElementById('invite-email').disabled = true;
     document.getElementById('invite-name').value = user.full_name || '';
-    document.getElementById('invite-role').value = user.role || 'user';
-    document.getElementById('invite-can-edit').checked = user.can_edit !== false;
-    const allowedCats = user.allowed_categories;
-    const hasAll = !allowedCats || (Array.isArray(allowedCats) && allowedCats.length === 0);
-    document.getElementById('invite-all-cats').checked = hasAll;
-    document.getElementById('invite-cats-grid').innerHTML = categories.map(c =>
-      '<label class="perm-item"><input type="checkbox" data-cat-id="' + c.id + '"' +
-      (hasAll || (allowedCats||[]).includes(c.id) ? ' checked' : '') + '> ' + esc(c.name) + '</label>'
-    ).join('');
-    document.getElementById('invite-cats-grid').style.display = hasAll ? 'none' : 'grid';
+    // רמת גישה
+    const isView = user.can_edit === false;
+    document.getElementById(isView ? 'invite-access-view' : 'invite-access-edit').checked = true;
+    document.getElementById('invite-struct-section').style.display = isView ? 'none' : '';
+    // מבנה
+    if (user.can_add_categories) document.getElementById('invite-struct-all').checked = true;
+    else if (user.can_add_subcategories) document.getElementById('invite-struct-subcat').checked = true;
+    else document.getElementById('invite-struct-none').checked = true;
+    // קטגוריות
+    _buildCatsGrid(user.allowed_categories);
   });
   document.getElementById('modal-invite').classList.add('open');
 }
@@ -2334,8 +2470,11 @@ function openEditPermModal(userId) {
 async function saveUserPerms() {
   const userId = document.getElementById('invite-user-id').value;
   const name = document.getElementById('invite-name').value.trim();
-  const role = document.getElementById('invite-role').value;
-  const canEdit = document.getElementById('invite-can-edit').checked;
+  const accessVal = getRadioValue('invite-access');
+  const canEdit = accessVal !== 'view';
+  const structVal = getRadioValue('invite-struct') || 'none';
+  const canAddCategories = structVal === 'all';
+  const canAddSubcategories = structVal === 'subcat';
   const allCats = document.getElementById('invite-all-cats').checked;
   let allowedCats = null;
   if (!allCats) {
@@ -2344,7 +2483,7 @@ async function saveUserPerms() {
   try {
     await sb('users?id=eq.' + userId, {
       method: 'PATCH',
-      body: { full_name: name, role, can_edit: canEdit, allowed_categories: allowedCats },
+      body: { full_name: name, can_edit: canEdit, can_add_categories: canAddCategories, can_add_subcategories: canAddSubcategories, allowed_categories: allowedCats },
       prefer: 'return=minimal'
     });
     closeModal('modal-invite');
@@ -2358,23 +2497,26 @@ async function saveUserPerms() {
 async function createInvite() {
   const email = document.getElementById('invite-email').value.trim().toLowerCase();
   const name = document.getElementById('invite-name').value.trim();
-  const role = document.getElementById('invite-role').value;
-  const canEdit = document.getElementById('invite-can-edit').checked;
-  const allCats = document.getElementById('invite-all-cats').checked;
   document.getElementById('invite-err').textContent = '';
   if (!email || !name) { document.getElementById('invite-err').textContent = 'נא למלא אימייל ושם'; return; }
+  const inviteType = getRadioValue('invite-type') || 'share';
+  const isShare = inviteType === 'share';
+  const canEdit = isShare ? (getRadioValue('invite-access') !== 'view') : true;
+  const structVal = isShare ? (getRadioValue('invite-struct') || 'none') : 'all';
+  const canAddCategories = structVal === 'all';
+  const canAddSubcategories = structVal === 'subcat';
+  const allCats = document.getElementById('invite-all-cats').checked;
   let allowedCats = null;
-  if (!allCats) {
+  if (isShare && !allCats) {
     allowedCats = [...document.querySelectorAll('#invite-cats-grid input[type=checkbox]:checked')].map(el => el.getAttribute('data-cat-id'));
   }
   try {
     const rows = await sb('user_invites', {
       method: 'POST',
-      body: { owner_id: uid(), email, full_name: name, role, can_edit: canEdit, allowed_categories: allowedCats },
+      body: { owner_id: uid(), email, full_name: name, role: 'user', can_edit: canEdit, can_add_categories: canAddCategories, can_add_subcategories: canAddSubcategories, allowed_categories: allowedCats, invite_type: inviteType },
     });
     const invite = rows?.[0];
     if (!invite) throw new Error('לא נוצרה הזמנה');
-
     const link = location.origin + '/?invite=' + invite.token;
     document.getElementById('invite-link-url').value = link;
     document.getElementById('invite-link-box').style.display = '';
@@ -2509,6 +2651,8 @@ async function completeInvite() {
         id: userId, email: invite.email, full_name: invite.full_name,
         role: invite.role || 'user', owner_id: invite.owner_id,
         can_edit: invite.can_edit !== false,
+        can_add_categories: invite.can_add_categories === true,
+        can_add_subcategories: invite.can_add_subcategories === true,
         allowed_categories: invite.allowed_categories || null
       }});
     } catch(_) {
@@ -2516,6 +2660,8 @@ async function completeInvite() {
         await sb('users?id=eq.' + userId, { method: 'PATCH', body: {
           full_name: invite.full_name, role: invite.role || 'user',
           owner_id: invite.owner_id, can_edit: invite.can_edit !== false,
+          can_add_categories: invite.can_add_categories === true,
+          can_add_subcategories: invite.can_add_subcategories === true,
           allowed_categories: invite.allowed_categories || null
         }, prefer: 'return=minimal' });
       } catch(_2) {}
