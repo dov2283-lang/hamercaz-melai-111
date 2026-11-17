@@ -1386,13 +1386,16 @@ function getDetailTypes(subcatId) {
   } catch(e) { return []; }
 }
 
-// תצוגת פרטי מוצר כ-badges
-function detailBadges(product) {
-  const details = product.details;
+// תצוגת פרטי מוצר כ-badges — מקבל אובייקט details ישירות
+function detailBadgesFromObj(details) {
   if (!details || typeof details !== 'object') return '';
   return Object.entries(details).map(([k,v]) =>
-    '<span style="display:inline-block;background:var(--surface2);border-radius:4px;padding:1px 6px;font-size:.74rem;margin:1px">' + esc(k) + ': ' + esc(String(v)) + '</span>'
+    '<span style="display:inline-block;background:var(--accent-lt);color:var(--accent);border-radius:4px;padding:1px 7px;font-size:.74rem;margin:1px;font-weight:600">' + esc(k) + ': ' + esc(String(v)) + '</span>'
   ).join('');
+}
+// תצוגת פרטי מוצר כ-badges — מקבל אובייקט product
+function detailBadges(product) {
+  return detailBadgesFromObj(product?.details);
 }
 
 function renderProducts() {
@@ -1572,7 +1575,7 @@ function renderSupply() {
     return '<tr data-id="' + s.id + '">' +
       '<td><input type="checkbox" class="sup-row-check" data-id="' + s.id + '" onchange="supOnCheckChange()"></td>' +
       '<td>' + fmtDate(s.date) + '</td>' +
-      '<td><strong>' + esc(p?.name||'—') + '</strong>' + (p ? '<div style="margin-top:2px">' + detailBadges(p) + '</div>' : '') + '</td>' +
+      '<td><strong>' + esc(p?.name||'—') + '</strong>' + '<div style="margin-top:2px">' + (s.details && Object.keys(s.details).length ? detailBadgesFromObj(s.details) : detailBadges(p)) + '</div></td>' +
       '<td>' + catBadge(p?.category_id) + '</td>' +
       '<td class="tbl-num">' + s.qty + '</td><td class="tbl-num">' + fmtMoney(s.price) + '</td>' +
       '<td style="font-size:.8rem">' + esc(v?.name||'—') + '</td><td style="font-size:.8rem;color:var(--fg3)">' + esc(s.notes||'—') + '</td>' +
@@ -1816,7 +1819,7 @@ function renderCounts() {
     return '<tr data-id="' + c.id + '">' +
       '<td><input type="checkbox" class="cnt-row-check" data-id="' + c.id + '" onchange="cntOnCheckChange()"></td>' +
       '<td>' + fmtDate(c.date) + '</td>' +
-      '<td><strong>' + esc(p?.name||'—') + '</strong>' + (p ? '<div style="margin-top:2px">' + detailBadges(p) + '</div>' : '') + '</td>' +
+      '<td><strong>' + esc(p?.name||'—') + '</strong>' + '<div style="margin-top:2px">' + (c.details && Object.keys(c.details).length ? detailBadgesFromObj(c.details) : detailBadges(p)) + '</div></td>' +
       '<td>' + catBadge(p?.category_id) + '</td>' +
       '<td class="tbl-num" style="font-weight:700">' + c.count + '</td>' +
       '<td style="font-size:.8rem;color:var(--fg3)">' + esc(c.notes||'—') + '</td>' +
@@ -2212,7 +2215,7 @@ function renderRpMovements(from, to, catF, subcatF) {
     .filter(s => (!catF || (getProduct(s.product_id)?.category_id === catF)) && (!subcatF || (getProduct(s.product_id)?.subcategory_id === subcatF)))
     .map(s => {
       const p = getProduct(s.product_id);
-      return { date: s.date, type: 'supply', typeLbl: '📦 אספקה', product: p?.name||'?', details: detailBadges(p), qty: s.qty||s.quantity||0, note: s.notes||'', catId: p?.category_id };
+      return { date: s.date, type: 'supply', typeLbl: '📦 אספקה', product: p?.name||'?', details: (s.details && Object.keys(s.details).length ? detailBadgesFromObj(s.details) : detailBadges(p)), qty: s.qty||s.quantity||0, note: s.notes||'', catId: p?.category_id };
     });
 
   const countEvts = counts
@@ -2220,7 +2223,7 @@ function renderRpMovements(from, to, catF, subcatF) {
     .filter(c => (!catF || (getProduct(c.product_id)?.category_id === catF)) && (!subcatF || (getProduct(c.product_id)?.subcategory_id === subcatF)))
     .map(c => {
       const p = getProduct(c.product_id);
-      return { date: c.date, type: 'count', typeLbl: '🔢 ספירה', product: p?.name||'?', details: detailBadges(p), qty: c.count||c.quantity||0, note: c.notes||'', catId: p?.category_id };
+      return { date: c.date, type: 'count', typeLbl: '🔢 ספירה', product: p?.name||'?', details: (c.details && Object.keys(c.details).length ? detailBadgesFromObj(c.details) : detailBadges(p)), qty: c.count||c.quantity||0, note: c.notes||'', catId: p?.category_id };
     });
 
   const all = [...supplyEvts, ...countEvts].sort((a,b) => b.date.localeCompare(a.date));
