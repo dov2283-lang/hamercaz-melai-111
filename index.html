@@ -3315,241 +3315,363 @@ function calcSold(productId, from, to) {
 })();
 
 // ══════════════════════════════════════════
-//  IMPORT — ייבוא מאקסל
+//  IMPORT — ייבוא אקסל חכם
 // ══════════════════════════════════════════
-let _importMode = 'supply'; // 'supply' | 'counts'
-let _importRawRows = [];    // שורות גולמיות מהקובץ (מערך של אובייקטים {עמודה: ערך})
-let _importHeaders = [];    // כותרות עמודות מהקובץ
-let _importPreviewRows = []; // שורות מעובדות לתצוגה מקדימה
+let _importMode = 'supply';
+let _importRawRows = [];
+let _importHeaders = [];    // רק עמודות לא-ריקות
+let _importMapping = {};    // colName → { role, detailKey? }  role: 'date'|'product'|'qty'|'price'|'supplier'|'notes'|'count'|'detail'|'ignore'
+let _importPreviewRows = [];
+let _importDetailCols = []; // עמודות שזוהו כ-detail
 
-// הגדרת שדות לכל מצב
-const IMPORT_FIELDS = {
-  supply: [
-    { key: 'date',        label: 'תאריך',   required: true,  type: 'date'   },
-    { key: 'product',     label: 'מוצר',    required: true,  type: 'product'},
-    { key: 'qty',         label: 'כמות',    required: false, type: 'number' },
-    { key: 'price',       label: 'מחיר',    required: false, type: 'number' },
-    { key: 'supplier',    label: 'ספק',     required: false, type: 'supplier'},
-    { key: 'notes',       label: 'הערות',   required: false, type: 'text'   },
-  ],
-  counts: [
-    { key: 'date',        label: 'תאריך',   required: true,  type: 'date'   },
-    { key: 'product',     label: 'מוצר',    required: true,  type: 'product'},
-    { key: 'count',       label: 'כמות',    required: true,  type: 'number' },
-    { key: 'notes',       label: 'הערות',   required: false, type: 'text'   },
-  ]
-};
-
-// מילות מפתח לזיהוי אוטומטי של עמודות
-const IMPORT_COL_KEYWORDS = {
-  date:     ['תאריך','date','יום','day','תארי'],
-  product:  ['מוצר','product','פריט','item','שם','name','מוצרים'],
-  qty:      ['כמות','qty','quantity','amount','מכמות','כמ'],
-  price:    ['מחיר','price','עלות','cost','תמחור'],
-  supplier: ['ספק','supplier','vendor','יצרן','ספקים'],
-  notes:    ['הערות','notes','comment','remarks','備考','備注','備考'],
-  count:    ['כמות','count','ספירה','מלאי','qty','quantity'],
-};
-
+// ══ פתיחת מודל ══
 function openImportModal(mode) {
   _importMode = mode;
-  _importRawRows = [];
-  _importHeaders = [];
-  _importPreviewRows = [];
+  _importRawRows = []; _importHeaders = []; _importMapping = {}; _importPreviewRows = []; _importDetailCols = [];
   document.getElementById('import-modal-title').textContent =
     mode === 'supply' ? '📥 ייבוא אספקות מאקסל' : '📥 ייבוא ספירות מלאי מאקסל';
 
-  // הוראות לפי סוג
-  const fields = IMPORT_FIELDS[mode];
-  const reqFields = fields.filter(f => f.required).map(f => f.label).join(', ');
-  const optFields = fields.filter(f => !f.required).map(f => f.label).join(', ');
-  const exampleRow = mode === 'supply'
-    ? '<tr><td>01/11/2026</td><td>עגבניות שרי</td><td>50</td><td>120</td><td>חקלאי טרי</td><td></td></tr>'
-    : '<tr><td>01/11/2026</td><td>עגבניות שרי</td><td>50</td><td></td></tr>';
-  const exampleCols = mode === 'supply'
-    ? '<th>תאריך</th><th>מוצר</th><th>כמות</th><th>מחיר</th><th>ספק</th><th>הערות</th>'
-    : '<th>תאריך</th><th>מוצר</th><th>כמות</th><th>הערות</th>';
+  // הוראות דינמיות — כולל detail_types מהמערכת
+  const detailNames = _importGetDetailNames();
+  const exDetails = detailNames.length ? ' | ' + detailNames.slice(0,3).join(' | ') : '';
+  const exRow = mode === 'supply'
+    ? `<tr><td>01/11/2026</td><td>שם מוצר</td><td>50</td><td>120</td><td>שם ספק</td>${detailNames.length?'<td>ערך פרט</td>':''}</tr>`
+    : `<tr><td>01/11/2026</td><td>שם מוצר</td><td>50</td>${detailNames.length?'<td>ערך פרט</td>':''}</tr>`;
+  const exHead = mode === 'supply'
+    ? `<th>תאריך</th><th>מוצר</th><th>כמות</th><th>מחיר</th><th>ספק</th>${detailNames.length?'<th>'+esc(detailNames[0]||'')+'</th>':''}`
+    : `<th>תאריך</th><th>מוצר</th><th>כמות</th>${detailNames.length?'<th>'+esc(detailNames[0]||'')+'</th>':''}`;
 
   document.getElementById('import-instructions').innerHTML =
-    '<b>שדות חובה:</b> ' + reqFields + '<br>' +
-    '<b>שדות אופציונליים:</b> ' + (optFields || '—') + '<br>' +
-    '<b>פורמט תאריך מקובל:</b> DD/MM/YYYY, YYYY-MM-DD, או MM/DD/YYYY<br>' +
-    '<b>מוצר:</b> שם המוצר בדיוק כפי שרשום במערכת (המיפוי יעזור לך לתקן שגיאות)<br><br>' +
-    '<details style="cursor:pointer"><summary style="font-weight:600;color:var(--accent)">📄 דוגמה לטבלה תקינה</summary>' +
-    '<div style="overflow-x:auto;margin-top:8px"><table class="tbl" style="font-size:.78rem"><thead><tr>' + exampleCols + '</tr></thead><tbody>' + exampleRow + '</tbody></table></div></details>';
+    '📌 המערכת <b>תזהה אוטומטית</b> את העמודות לפי שמותיהן ולפי תוכן הנתונים.<br>' +
+    '📅 <b>תאריך:</b> DD/MM/YYYY, YYYY-MM-DD, או MM/DD/YYYY<br>' +
+    '📦 <b>מוצר:</b> שם המוצר (חלקי גם עובד) — ניתן לתקן במסך הבא<br>' +
+    (detailNames.length ? '🏷️ <b>פרטי מוצר שזוהו במערכת:</b> ' + detailNames.map(d=>'<code>'+esc(d)+'</code>').join(', ') + '<br>' : '') +
+    '<details style="cursor:pointer;margin-top:6px"><summary style="font-weight:600;color:var(--accent)">📄 דוגמה לטבלה</summary>' +
+    '<div style="overflow-x:auto;margin-top:6px"><table class="tbl" style="font-size:.78rem"><thead><tr>'+exHead+'</tr></thead><tbody>'+exRow+'</tbody></table></div></details>';
 
-  // איפוס
   document.getElementById('import-file-input').value = '';
   document.getElementById('import-file-err').style.display = 'none';
   importGoStep(1);
   document.getElementById('modal-import').classList.add('open');
 }
 
-function importGoStep(n) {
-  [1,2,3,4].forEach(i => {
-    document.getElementById('import-step-' + i).style.display = i === n ? '' : 'none';
+// אסוף את כל שמות detail_types מכל הקטגוריות/תת-קטגוריות
+function _importGetDetailNames() {
+  const names = new Set();
+  subcategories.forEach(sc => {
+    (sc.detail_types||[]).forEach(dt => { if (dt.name) names.add(dt.name); });
   });
+  return [...names];
 }
 
-// ── קריאת קובץ ──
+function importGoStep(n) {
+  [1,2,3,4].forEach(i => document.getElementById('import-step-'+i).style.display = i===n?'':'none');
+}
+
+// ══ קריאת קובץ ══
 function importHandleFile(file) {
   if (!file) return;
   const ext = file.name.split('.').pop().toLowerCase();
   const errEl = document.getElementById('import-file-err');
+  const process = (rows, headers) => {
+    if (!rows.length) { errEl.textContent='הקובץ ריק או לא תקין'; errEl.style.display=''; return; }
+    // סנן עמודות ריקות (EMPTY__, __EMPTY, עמודות שכל הערכים שלהן ריקים)
+    const cleanHeaders = headers.filter(h => {
+      if (!h || /^(EMPTY|__EMPTY|_EMPTY)/i.test(h.trim())) return false;
+      const hasData = rows.some(r => String(r[h]||'').trim() !== '');
+      return hasData;
+    });
+    _importHeaders = cleanHeaders;
+    _importRawRows = rows;
+    importAutoDetect();
+  };
 
   if (ext === 'csv') {
     const reader = new FileReader();
     reader.onload = e => {
-      const result = Papa.parse(e.target.result, { header: true, skipEmptyLines: true, encoding: 'UTF-8' });
-      if (!result.data?.length) { errEl.textContent = 'הקובץ ריק או לא תקין'; errEl.style.display = ''; return; }
-      _importHeaders = result.meta.fields || [];
-      _importRawRows = result.data;
-      importGoStep(2);
-      importBuildMappingUI();
+      const r = Papa.parse(e.target.result, {header:true, skipEmptyLines:true, encoding:'UTF-8'});
+      process(r.data, r.meta.fields||[]);
     };
-    reader.readAsText(file, 'UTF-8');
-  } else if (ext === 'xlsx' || ext === 'xls') {
-    // קריאה דרך SheetJS (נטען דינמית אם לא קיים)
+    reader.readAsText(file,'UTF-8');
+  } else if (ext==='xlsx'||ext==='xls') {
     importLoadSheetJS(() => {
       const reader = new FileReader();
       reader.onload = e => {
         try {
-          const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+          const wb = XLSX.read(e.target.result,{type:'array',cellDates:true});
           const ws = wb.Sheets[wb.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
-          if (!rows.length) { errEl.textContent = 'הקובץ ריק או לא תקין'; errEl.style.display = ''; return; }
-          _importHeaders = Object.keys(rows[0]);
-          _importRawRows = rows;
-          importGoStep(2);
-          importBuildMappingUI();
-        } catch(e2) {
-          errEl.textContent = 'שגיאה בקריאת הקובץ: ' + e2.message;
-          errEl.style.display = '';
-        }
+          const rows = XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+          process(rows, rows.length ? Object.keys(rows[0]) : []);
+        } catch(e2) { errEl.textContent='שגיאה: '+e2.message; errEl.style.display=''; }
       };
       reader.readAsArrayBuffer(file);
     });
-  } else {
-    errEl.textContent = 'פורמט לא נתמך — יש להעלות קובץ .xlsx, .xls, או .csv';
-    errEl.style.display = '';
-  }
+  } else { errEl.textContent='פורמט לא נתמך — xlsx/xls/csv בלבד'; errEl.style.display=''; }
 }
 
 function importLoadSheetJS(cb) {
   if (window.XLSX) { cb(); return; }
   const s = document.createElement('script');
   s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-  s.onload = cb;
-  document.head.appendChild(s);
+  s.onload = cb; document.head.appendChild(s);
 }
 
-// ── בניית ממשק מיפוי עמודות ──
-function importBuildMappingUI() {
-  const fields = IMPORT_FIELDS[_importMode];
-  const grid = document.getElementById('import-mapping-grid');
-  grid.innerHTML = '';
+// ══ ניתוח אוטומטי חכם של עמודות ══
+function importAutoDetect() {
+  const mode = _importMode;
+  const detailNames = _importGetDetailNames(); // שמות פרטים מהמערכת
+  const mapping = {};
 
-  // כותרת
-  grid.insertAdjacentHTML('beforeend',
-    '<div style="font-size:.78rem;font-weight:700;color:var(--fg3)">עמודה בקובץ</div>' +
-    '<div></div>' +
-    '<div style="font-size:.78rem;font-weight:700;color:var(--fg3)">מיפוי לשדה במערכת</div>');
+  // — ציון לכל עמודה לכל תפקיד —
+  const ROLES_SUPPLY  = ['date','product','qty','price','supplier','notes'];
+  const ROLES_COUNTS  = ['date','product','count','notes'];
+  const coreRoles     = mode==='supply' ? ROLES_SUPPLY : ROLES_COUNTS;
+
+  // מילות מפתח לכל תפקיד (עברית + אנגלית)
+  const KW = {
+    date:     ['תאריך','date','יום','day'],
+    product:  ['מוצר','product','פריט','item','שם מוצר','שם'],
+    qty:      ['כמות','qty','quantity','amount','כמ'],
+    count:    ['כמות','count','ספירה','מלאי','qty','quantity'],
+    price:    ['מחיר','price','עלות','cost','תמחור'],
+    supplier: ['ספק','supplier','vendor','יצרן','מוריד'],
+    notes:    ['הערות','notes','comment','remarks','备注'],
+  };
+
+  // ניתוח תוכן עמודה — החזר ציון לתפקיד
+  function scoreCol(colName, sampleVals) {
+    const c = colName.toLowerCase().trim();
+    const scores = {};
+
+    // ציון לפי שם
+    for (const [role, kws] of Object.entries(KW)) {
+      scores[role] = kws.some(kw => c.includes(kw.toLowerCase())) ? 10 : 0;
+    }
+
+    // ציון לפי תוכן
+    const nonEmpty = sampleVals.filter(v => v && String(v).trim());
+    if (!nonEmpty.length) return scores;
+
+    // תאריך: רוב הערכים תואמים תבנית תאריך
+    const dateMatches = nonEmpty.filter(v => importParseDate(String(v)) !== String(v)).length;
+    scores.date += (dateMatches / nonEmpty.length) > 0.5 ? 8 : 0;
+
+    // מוצר: חפיפה עם שמות מוצרים במערכת
+    const prodMatches = nonEmpty.filter(v => importFindProduct(String(v))).length;
+    scores.product += (prodMatches / nonEmpty.length) > 0.3 ? 12 : 0;
+    // אם כמעט הכל מוצרים ידועים — חזק מאוד
+    scores.product += (prodMatches / nonEmpty.length) > 0.7 ? 8 : 0;
+
+    // מספרים: רוב הערכים מספריים
+    const numMatches = nonEmpty.filter(v => !isNaN(parseFloat(String(v).replace(/,/g,'')))).length;
+    const numRatio = numMatches / nonEmpty.length;
+    if (numRatio > 0.8) { scores.qty += 4; scores.price += 4; scores.count += 4; }
+    // מחיר: מספרים גדולים יחסית
+    const avgNum = nonEmpty.reduce((s,v)=>s+(parseFloat(String(v).replace(/,/g,''))||0),0)/nonEmpty.length;
+    if (numRatio > 0.8 && avgNum > 50) scores.price += 3;
+
+    // ספק: חפיפה עם ספקים
+    const supMatches = nonEmpty.filter(v => suppliers.find(s=>s.name?.toLowerCase().includes(String(v).toLowerCase()))).length;
+    scores.supplier += (supMatches / nonEmpty.length) > 0.3 ? 10 : 0;
+
+    return scores;
+  }
+
+  // שלב א: ניחוש ראשוני
+  const usedRoles = new Set();
+  const colScores = {}; // colName → scores
 
   _importHeaders.forEach(col => {
-    const autoKey = importGuessField(col);
-    const opts = '<option value="">— התעלם מעמודה זו —</option>' +
-      fields.map(f => `<option value="${f.key}" ${autoKey === f.key ? 'selected' : ''}>${f.label}${f.required ? ' *' : ''}</option>`).join('');
-
-    const confidence = autoKey
-      ? '<span style="color:var(--ok);font-size:.75rem" title="זוהה אוטומטית">✓ זוהה</span>'
-      : '<span style="color:var(--warn);font-size:.75rem" title="לא זוהה — בחר ידנית">? לא זוהה</span>';
-
-    grid.insertAdjacentHTML('beforeend',
-      `<div style="font-size:.82rem;padding:4px 8px;background:var(--surface2);border-radius:4px;font-weight:600">${esc(col)}</div>` +
-      `<div style="text-align:center">${confidence} →</div>` +
-      `<select class="import-col-map" data-col="${esc(col)}" style="font-size:.82rem">${opts}</select>`);
+    const samples = _importRawRows.slice(0,10).map(r=>r[col]);
+    colScores[col] = scoreCol(col, samples);
   });
 
-  // תצוגה מקדימה של 2 שורות ראשונות
-  if (_importRawRows.length) {
-    grid.insertAdjacentHTML('beforeend',
-      '<div style="grid-column:1/-1;margin-top:10px;font-size:.78rem;font-weight:700;color:var(--fg3)">תצוגה מקדימה (2 שורות ראשונות):</div>');
-    const preview = _importRawRows.slice(0,2);
-    preview.forEach((row, ri) => {
-      const cols = _importHeaders.map(h =>
-        `<span style="font-size:.74rem;color:var(--fg2)">${esc(String(row[h]||''))}</span>`
-      ).join(' | ');
-      grid.insertAdjacentHTML('beforeend',
-        `<div style="grid-column:1/-1;padding:3px 8px;background:var(--surface2);border-radius:4px;font-size:.74rem;line-height:1.5">${cols}</div>`);
+  // שלב ב: מיפוי — כל תפקיד מוקצה לעמודה עם הציון הגבוה ביותר
+  // סדר עדיפויות: date > product > qty/count > price > supplier > notes
+  const priorityRoles = mode==='supply'
+    ? ['date','product','qty','price','supplier','notes']
+    : ['date','product','count','notes'];
+
+  for (const role of priorityRoles) {
+    let best = null, bestScore = 0;
+    _importHeaders.forEach(col => {
+      if (mapping[col]) return; // כבר מוקצה
+      const s = colScores[col][role] || 0;
+      if (s > bestScore) { best = col; bestScore = s; }
     });
+    if (best && bestScore > 0) { mapping[best] = { role }; usedRoles.add(role); }
   }
-}
 
-// ניחוש אוטומטי של שדה לפי שם עמודה
-function importGuessField(colName) {
-  const c = colName.toLowerCase().trim();
-  const fields = IMPORT_FIELDS[_importMode];
-  for (const f of fields) {
-    const keywords = IMPORT_COL_KEYWORDS[f.key] || [];
-    if (keywords.some(kw => c.includes(kw.toLowerCase()))) return f.key;
-  }
-  return null;
-}
-
-// ── אחרי מיפוי — בנה שורות תצוגה מקדימה ──
-function importApplyMapping() {
-  const mapEls = document.querySelectorAll('.import-col-map');
-  const mapping = {}; // fieldKey → colName
-  mapEls.forEach(el => {
-    const col = el.getAttribute('data-col');
-    const fieldKey = el.value;
-    if (fieldKey) mapping[fieldKey] = col;
-  });
-
-  // ולידציה: שדות חובה
-  const fields = IMPORT_FIELDS[_importMode];
-  const missing = fields.filter(f => f.required && !mapping[f.key]).map(f => f.label);
-  const errEl = document.getElementById('import-map-err');
-  if (missing.length) {
-    errEl.textContent = 'חסרים שדות חובה: ' + missing.join(', ');
-    errEl.style.display = '';
-    return;
-  }
-  errEl.style.display = 'none';
-
-  // בניית שורות מעובדות
-  _importPreviewRows = _importRawRows.map((raw, idx) => {
-    const row = { _idx: idx, _include: true, _errors: [] };
-    fields.forEach(f => {
-      const col = mapping[f.key];
-      let val = col ? String(raw[col] || '').trim() : '';
-      if (f.type === 'date') val = importParseDate(val);
-      if (f.type === 'number') val = val === '' ? '' : (parseFloat(val.replace(/,/g,'')) || '');
-      if (f.type === 'product') {
-        // ניסיון לזהות מוצר
-        row['_product_raw'] = val;
-        const match = importFindProduct(val);
-        row['_product_id'] = match ? match.id : null;
-        if (f.required && !match) row._errors.push('מוצר לא זוהה: ' + val);
+  // שלב ג: עמודות שלא מוקצות — בדוק אם הן detail_types
+  _importHeaders.forEach(col => {
+    if (mapping[col]) return;
+    const c = col.toLowerCase().trim();
+    // האם שם העמודה תואם detail_type ידוע?
+    const matchedDetail = detailNames.find(d => d.toLowerCase() === c || c.includes(d.toLowerCase()) || d.toLowerCase().includes(c));
+    if (matchedDetail) {
+      mapping[col] = { role: 'detail', detailKey: matchedDetail };
+      _importDetailCols.push({ col, detailKey: matchedDetail });
+    } else {
+      // בדוק אם תוכן העמודה יכול להיות detail — טקסט או מספרים שלא זוהו
+      const samples = _importRawRows.slice(0,5).map(r=>String(r[col]||'').trim()).filter(Boolean);
+      if (samples.length > 0) {
+        mapping[col] = { role: 'detail', detailKey: col }; // שמור כ-detail עם שם העמודה כמפתח
+        _importDetailCols.push({ col, detailKey: col });
+      } else {
+        mapping[col] = { role: 'ignore' };
       }
-      if (f.type === 'supplier') {
-        row['_supplier_raw'] = val;
-        const match = val ? suppliers.find(s => s.name?.toLowerCase() === val.toLowerCase()) : null;
-        row['_supplier_id'] = match ? match.id : null;
-      }
-      row[f.key] = val;
-    });
-    if (f => f.required && !row[f.key] && f.type !== 'product') {
-      fields.filter(f2 => f2.required && f2.type !== 'product').forEach(f2 => {
-        if (!row[f2.key]) row._errors.push(f2.label + ' חסר');
-      });
     }
-    return row;
-  }).filter(r => {
-    // הסר שורות ריקות לחלוטין
-    const fields2 = IMPORT_FIELDS[_importMode];
-    return fields2.some(f => r[f.key] !== '' && r[f.key] !== null && r[f.key] !== undefined);
   });
+
+  _importMapping = mapping;
+  importBuildMappingUI();
+  importGoStep(2);
+}
+
+// ══ ממשק מיפוי — מציג את מה שזוהה עם אפשרות תיקון ══
+function importBuildMappingUI() {
+  const grid = document.getElementById('import-mapping-grid');
+  const mode = _importMode;
+  const detailNames = _importGetDetailNames();
+
+  const roleOptions = (mode==='supply'
+    ? ['date','product','qty','price','supplier','notes']
+    : ['date','product','count','notes']
+  ).concat(['detail','ignore']);
+
+  const roleLabels = {
+    date:'תאריך', product:'מוצר', qty:'כמות', price:'מחיר',
+    supplier:'ספק', notes:'הערות', count:'כמות ספירה',
+    detail:'פרט מוצר (details)', ignore:'— התעלם —'
+  };
+
+  grid.innerHTML =
+    '<div style="font-size:.77rem;font-weight:700;color:var(--fg3)">עמודה בקובץ</div>' +
+    '<div style="font-size:.77rem;color:var(--fg3)">דוגמה מהנתונים</div>' +
+    '<div style="font-size:.77rem;font-weight:700;color:var(--fg3)">תפקיד במערכת</div>' +
+    '<div style="font-size:.77rem;color:var(--fg3)">שם פרט (אם detail)</div>';
+
+  _importHeaders.forEach(col => {
+    const info = _importMapping[col] || { role:'ignore' };
+    const sample = _importRawRows.slice(0,3).map(r=>String(r[col]||'').trim()).filter(Boolean).join(' / ');
+    const isDetected = info.role !== 'ignore';
+
+    const roleOpts = roleOptions.map(r =>
+      `<option value="${r}" ${info.role===r?'selected':''}>${roleLabels[r]||r}</option>`
+    ).join('');
+
+    // שם פרט — select מה-detail_types הידועים + אפשרות חופשית
+    const detailKeyOpts = detailNames.map(d =>
+      `<option value="${d}" ${info.detailKey===d?'selected':''}>${esc(d)}</option>`
+    ).join('');
+    const detailKeyInput = info.role==='detail'
+      ? `<select class="imp-detail-key" data-col="${esc(col)}" style="font-size:.8rem">` +
+        `<option value="${esc(col)}" ${!detailNames.includes(info.detailKey)?'selected':''}>${esc(info.detailKey||col)}</option>` +
+        detailKeyOpts + '</select>'
+      : `<span style="color:var(--fg3);font-size:.78rem">—</span>`;
+
+    const badge = isDetected
+      ? `<span style="color:var(--ok);font-size:.73rem">✓</span>`
+      : `<span style="color:var(--fg3);font-size:.73rem">?</span>`;
+
+    grid.insertAdjacentHTML('beforeend',
+      `<div style="display:flex;align-items:center;gap:5px;padding:4px 6px;background:var(--surface2);border-radius:4px;font-size:.82rem;font-weight:600">${badge} ${esc(col)}</div>` +
+      `<div style="font-size:.76rem;color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(sample)}">${esc(sample.slice(0,40))}</div>` +
+      `<select class="imp-role-sel" data-col="${esc(col)}" style="font-size:.8rem" onchange="importRoleChange(this)">${roleOpts}</select>` +
+      `<div class="imp-detail-wrap-${esc(col).replace(/[^a-z0-9]/gi,'_')}">${detailKeyInput}</div>`
+    );
+  });
+}
+
+function importRoleChange(sel) {
+  const col = sel.getAttribute('data-col');
+  const role = sel.value;
+  if (_importMapping[col]) _importMapping[col].role = role;
+  else _importMapping[col] = { role };
+  // הצג/הסתר שדה שם פרט
+  const wrapClass = 'imp-detail-wrap-' + col.replace(/[^a-z0-9]/gi,'_');
+  const wrap = document.querySelector('.' + wrapClass);
+  if (wrap) {
+    if (role === 'detail') {
+      const detailNames = _importGetDetailNames();
+      const colKey = _importMapping[col]?.detailKey || col;
+      const opts = detailNames.map(d=>`<option value="${d}" ${d===colKey?'selected':''}>${esc(d)}</option>`).join('');
+      wrap.innerHTML = `<select class="imp-detail-key" data-col="${esc(col)}" style="font-size:.8rem"><option value="${esc(col)}">${esc(col)}</option>${opts}</select>`;
+    } else {
+      wrap.innerHTML = '<span style="color:var(--fg3);font-size:.78rem">—</span>';
+    }
+  }
+}
+
+// ── אחרי מיפוי → תצוגה מקדימה ──
+function importApplyMapping() {
+  // עדכן mapping מה-selects
+  document.querySelectorAll('.imp-role-sel').forEach(sel => {
+    const col = sel.getAttribute('data-col');
+    if (!_importMapping[col]) _importMapping[col] = {};
+    _importMapping[col].role = sel.value;
+  });
+  document.querySelectorAll('.imp-detail-key').forEach(sel => {
+    const col = sel.getAttribute('data-col');
+    if (_importMapping[col]) _importMapping[col].detailKey = sel.value;
+  });
+
+  // ולידציה: תאריך + מוצר חובה
+  const hasDate = Object.values(_importMapping).some(m=>m.role==='date');
+  const hasProd = Object.values(_importMapping).some(m=>m.role==='product');
+  const errEl = document.getElementById('import-map-err');
+  if (!hasDate||!hasProd) {
+    errEl.textContent = 'חסרים שדות חובה: ' + (!hasDate?'תאריך ':'') + (!hasProd?'מוצר':'');
+    errEl.style.display=''; return;
+  }
+  errEl.style.display='none';
+
+  // בנה עמודות detail
+  _importDetailCols = [];
+  Object.entries(_importMapping).forEach(([col,info]) => {
+    if (info.role==='detail') _importDetailCols.push({ col, detailKey: info.detailKey||col });
+  });
+
+  // בנה שורות
+  _importPreviewRows = _importRawRows.map((raw, idx) => {
+    const row = { _idx:idx, _include:true, _errors:[], _details:{} };
+
+    Object.entries(_importMapping).forEach(([col,info]) => {
+      const rawVal = String(raw[col]||'').trim();
+      switch(info.role) {
+        case 'date':
+          row.date = importParseDate(rawVal);
+          break;
+        case 'product':
+          row._product_raw = rawVal;
+          const pm = importFindProduct(rawVal);
+          row._product_id = pm?.id||null;
+          break;
+        case 'qty': case 'count':
+          row[info.role] = rawVal ? (parseFloat(rawVal.replace(/,/g,''))||0) : 0;
+          break;
+        case 'price':
+          row.price = rawVal ? (parseFloat(rawVal.replace(/,/g,''))||0) : 0;
+          break;
+        case 'supplier':
+          row._supplier_raw = rawVal;
+          const sm = rawVal ? suppliers.find(s=>s.name?.toLowerCase().includes(rawVal.toLowerCase())) : null;
+          row._supplier_id = sm?.id||null;
+          break;
+        case 'notes':
+          row.notes = rawVal||null;
+          break;
+        case 'detail':
+          if (rawVal) row._details[info.detailKey||col] = rawVal;
+          break;
+      }
+    });
+
+    // ולידציה
+    if (!row.date) row._errors.push('תאריך חסר או לא תקין');
+    if (!row._product_id) row._errors.push('מוצר לא זוהה: '+(row._product_raw||''));
+    return row;
+  }).filter(r => r.date || r._product_raw); // הסר שורות ריקות לחלוטין
 
   importBuildPreviewTable();
   importGoStep(3);
@@ -3557,181 +3679,163 @@ function importApplyMapping() {
 
 function importParseDate(val) {
   if (!val) return '';
-  // נסה YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
-  // נסה DD/MM/YYYY
-  const m1 = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (m1) {
-    const y = m1[3].length === 2 ? '20' + m1[3] : m1[3];
-    return y + '-' + m1[2].padStart(2,'0') + '-' + m1[1].padStart(2,'0');
-  }
-  // נסה MM/DD/YYYY
-  const m2 = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m2) {
-    return m2[3] + '-' + m2[1].padStart(2,'0') + '-' + m2[2].padStart(2,'0');
-  }
-  // תאריך JS
-  const d = new Date(val);
+  const v = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const m1 = v.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})$/);
+  if (m1) { const y=m1[3].length===2?'20'+m1[3]:m1[3]; return y+'-'+m1[2].padStart(2,'0')+'-'+m1[1].padStart(2,'0'); }
+  const d = new Date(v);
   if (!isNaN(d)) return d.toISOString().slice(0,10);
-  return val; // החזר כמו שהוא
+  return '';
 }
 
 function importFindProduct(name) {
   if (!name) return null;
   const n = name.toLowerCase().trim();
-  return products.find(p => p.name?.toLowerCase() === n) ||
-         products.find(p => p.name?.toLowerCase().includes(n) || n.includes(p.name?.toLowerCase()));
+  if (!n) return null;
+  return products.find(p=>p.name?.toLowerCase()===n) ||
+         products.find(p=>p.name?.toLowerCase().includes(n)) ||
+         products.find(p=>n.includes(p.name?.toLowerCase()?.slice(0,4)||'XXXXXXX'));
 }
 
-// ── בניית טבלת תצוגה מקדימה עם עריכה ──
+// ══ טבלת תצוגה מקדימה ══
 function importBuildPreviewTable() {
-  const fields = IMPORT_FIELDS[_importMode];
-  // כותרות
-  document.getElementById('import-preview-head').innerHTML =
-    '<tr><th style="width:32px"><input type="checkbox" checked onchange="importToggleAll(this.checked)" title="בחר הכל"></th>' +
-    '<th style="width:28px">#</th>' +
-    fields.map(f => `<th>${f.label}${f.required?' *':''}</th>`).join('') +
-    '<th>סטטוס</th></tr>';
+  const mode = _importMode;
+  const detailCols = _importDetailCols;
 
-  // שורות
+  // כותרות
+  let ths = '<th style="width:28px"><input type="checkbox" checked onchange="importToggleAll(this.checked)"></th>' +
+    '<th>#</th><th>תאריך *</th><th>מוצר *</th>';
+  if (mode==='supply') ths += '<th>כמות</th><th>מחיר</th><th>ספק</th>';
+  else                  ths += '<th>כמות ספירה *</th>';
+  ths += '<th>הערות</th>';
+  detailCols.forEach(d => ths += `<th style="color:var(--accent);font-size:.75rem">🏷️ ${esc(d.detailKey)}</th>`);
+  ths += '<th>סטטוס</th>';
+  document.getElementById('import-preview-head').innerHTML = `<tr>${ths}</tr>`;
+
   importRenderPreviewRows();
   importUpdateSummary();
 }
 
 function importRenderPreviewRows() {
-  const fields = IMPORT_FIELDS[_importMode];
+  const mode = _importMode;
+  const detailCols = _importDetailCols;
   const tbody = document.getElementById('import-preview-body');
+
   tbody.innerHTML = _importPreviewRows.map((row, ri) => {
-    const rowClass = row._errors.length ? 'style="background:var(--err-lt)"' : '';
-    const cells = fields.map(f => {
-      const val = row[f.key] ?? '';
-      if (f.type === 'product') {
-        // select מוצר
-        const opts = '<option value="">— לא זוהה —</option>' +
-          products.map(p => `<option value="${p.id}" ${row._product_id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
-        return `<td><select style="font-size:.78rem;min-width:100px" onchange="importUpdateCell(${ri},'_product_id',this.value)">${opts}</select></td>`;
-      }
-      if (f.type === 'supplier') {
-        const opts = '<option value="">—</option>' +
-          suppliers.map(s => `<option value="${s.id}" ${row._supplier_id === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
-        return `<td><select style="font-size:.78rem;min-width:80px" onchange="importUpdateCell(${ri},'_supplier_id',this.value)">${opts}</select></td>`;
-      }
-      return `<td><input type="${f.type==='date'?'date':f.type==='number'?'number':'text'}" value="${esc(String(val))}" style="font-size:.78rem;width:${f.type==='date'?'110px':f.type==='number'?'60px':'90px'}" onchange="importUpdateCell(${ri},'${f.key}',this.value)"></td>`;
-    }).join('');
+    const bg = row._errors.length ? 'style="background:var(--err-lt)"' : '';
+    const prodOpts = `<option value="">— בחר מוצר —</option>` +
+      products.map(p=>`<option value="${p.id}" ${row._product_id===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+    const supOpts = `<option value="">—</option>` +
+      suppliers.map(s=>`<option value="${s.id}" ${row._supplier_id===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
 
-    const statusCell = row._errors.length
-      ? `<td style="color:var(--err);font-size:.74rem" title="${esc(row._errors.join(', '))}">⚠️ ${esc(row._errors[0])}</td>`
-      : `<td style="color:var(--ok);font-size:.74rem">✓</td>`;
-
-    return `<tr ${rowClass} id="import-row-${ri}">` +
+    let cells =
       `<td style="text-align:center"><input type="checkbox" ${row._include?'checked':''} onchange="importToggleRow(${ri},this.checked)"></td>` +
-      `<td style="color:var(--fg3);font-size:.74rem">${ri+1}</td>` +
-      cells + statusCell + '</tr>';
+      `<td style="color:var(--fg3);font-size:.73rem">${ri+1}</td>` +
+      `<td><input type="date" value="${esc(row.date||'')}" style="font-size:.77rem;width:110px" onchange="importUpdateCell(${ri},'date',this.value)"></td>` +
+      `<td><select style="font-size:.77rem;min-width:110px" onchange="importUpdateCell(${ri},'_product_id',this.value)">${prodOpts}</select>` +
+        (row._product_raw&&!row._product_id ? `<div style="font-size:.7rem;color:var(--warn)">⚠️ "${esc(row._product_raw)}"</div>` : '') + '</td>';
+
+    if (mode==='supply') {
+      cells +=
+        `<td><input type="number" value="${row.qty||''}" style="font-size:.77rem;width:55px" onchange="importUpdateCell(${ri},'qty',this.value)"></td>` +
+        `<td><input type="number" value="${row.price||''}" style="font-size:.77rem;width:65px" onchange="importUpdateCell(${ri},'price',this.value)"></td>` +
+        `<td><select style="font-size:.77rem;min-width:80px" onchange="importUpdateCell(${ri},'_supplier_id',this.value)">${supOpts}</select></td>`;
+    } else {
+      cells += `<td><input type="number" value="${row.count||''}" style="font-size:.77rem;width:65px" onchange="importUpdateCell(${ri},'count',this.value)"></td>`;
+    }
+    cells += `<td><input type="text" value="${esc(row.notes||'')}" style="font-size:.77rem;width:80px" onchange="importUpdateCell(${ri},'notes',this.value)"></td>`;
+
+    detailCols.forEach(d => {
+      const val = row._details?.[d.detailKey]||'';
+      cells += `<td><input type="text" value="${esc(String(val))}" style="font-size:.77rem;width:70px" onchange="importUpdateDetail(${ri},'${d.detailKey.replace(/'/g,"\\'")}',this.value)"></td>`;
+    });
+
+    const statusTd = row._errors.length
+      ? `<td style="color:var(--err);font-size:.72rem" title="${esc(row._errors.join(', '))}">⚠️ ${esc(row._errors[0].slice(0,20))}</td>`
+      : `<td style="color:var(--ok);font-size:.72rem">✓</td>`;
+
+    return `<tr ${bg} id="import-row-${ri}">${cells}${statusTd}</tr>`;
   }).join('') || '<tr><td colspan="20" class="empty">אין שורות לתצוגה</td></tr>';
 }
 
-function importUpdateCell(rowIdx, field, val) {
-  const row = _importPreviewRows[rowIdx];
+function importUpdateCell(ri, field, val) {
+  const row = _importPreviewRows[ri];
   if (!row) return;
   row[field] = val;
-  // עדכן שגיאות מחדש
+  importRevalidateRow(ri);
+  importUpdateSummary();
+}
+function importUpdateDetail(ri, key, val) {
+  const row = _importPreviewRows[ri];
+  if (!row) return;
+  if (!row._details) row._details={};
+  row._details[key] = val;
+}
+function importRevalidateRow(ri) {
+  const row = _importPreviewRows[ri];
   row._errors = [];
-  const fields = IMPORT_FIELDS[_importMode];
-  fields.forEach(f => {
-    if (f.required) {
-      if (f.type === 'product' && !row._product_id) row._errors.push('מוצר לא זוהה');
-      else if (f.type !== 'product' && !row[f.key]) row._errors.push(f.label + ' חסר');
-    }
-  });
-  // עדכן רק את השורה הספציפית
-  const tr = document.getElementById('import-row-' + rowIdx);
+  if (!row.date) row._errors.push('תאריך חסר');
+  if (!row._product_id) row._errors.push('מוצר לא זוהה');
+  if (_importMode==='counts' && !row.count) row._errors.push('כמות חסרה');
+  const tr = document.getElementById('import-row-'+ri);
   if (tr) {
-    tr.style.background = row._errors.length ? 'var(--err-lt)' : '';
-    const lastTd = tr.querySelector('td:last-child');
-    if (lastTd) {
-      lastTd.innerHTML = row._errors.length
-        ? `⚠️ <span style="font-size:.74rem">${esc(row._errors[0])}</span>`
-        : `<span style="color:var(--ok);font-size:.74rem">✓</span>`;
-    }
+    tr.style.background = row._errors.length?'var(--err-lt)':'';
+    const last = tr.querySelector('td:last-child');
+    if (last) last.innerHTML = row._errors.length
+      ? `⚠️ <span style="font-size:.72rem">${esc(row._errors[0])}</span>`
+      : `<span style="color:var(--ok);font-size:.72rem">✓</span>`;
   }
-  importUpdateSummary();
 }
-
-function importToggleRow(idx, checked) {
-  if (_importPreviewRows[idx]) _importPreviewRows[idx]._include = checked;
-  importUpdateSummary();
-}
-
+function importToggleRow(idx,checked) { if(_importPreviewRows[idx])_importPreviewRows[idx]._include=checked; importUpdateSummary(); }
 function importToggleAll(checked) {
-  _importPreviewRows.forEach(r => r._include = checked);
-  document.querySelectorAll('#import-preview-body input[type=checkbox]').forEach(el => el.checked = checked);
+  _importPreviewRows.forEach(r=>r._include=checked);
+  document.querySelectorAll('#import-preview-body input[type=checkbox]').forEach(el=>el.checked=checked);
   importUpdateSummary();
 }
-
 function importUpdateSummary() {
-  const total = _importPreviewRows.length;
-  const selected = _importPreviewRows.filter(r => r._include).length;
-  const errors = _importPreviewRows.filter(r => r._include && r._errors.length).length;
-  let txt = `${selected} מתוך ${total} שורות מסומנות לייבוא`;
-  if (errors) txt += ` · <span style="color:var(--err)">⚠️ ${errors} שורות עם שגיאות (לא יובאו)</span>`;
-  document.getElementById('import-summary-bar').innerHTML = txt;
+  const sel = _importPreviewRows.filter(r=>r._include).length;
+  const err = _importPreviewRows.filter(r=>r._include&&r._errors.length).length;
+  const ok = sel - err;
+  document.getElementById('import-summary-bar').innerHTML =
+    `${sel} שורות מסומנות · <span style="color:var(--ok)">✓ ${ok} תקינות</span>` +
+    (err ? ` · <span style="color:var(--err)">⚠️ ${err} עם שגיאות (לא יובאו)</span>` : '');
 }
 
-// ── ייבוא בפועל ──
+// ══ ייבוא בפועל ══
 async function importConfirm() {
-  const rows = _importPreviewRows.filter(r => r._include && !r._errors.length);
+  const rows = _importPreviewRows.filter(r=>r._include&&!r._errors.length);
   if (!rows.length) { alert('אין שורות תקינות לייבוא'); return; }
-
   const btn = document.getElementById('import-confirm-btn');
   const prog = document.getElementById('import-progress');
-  btn.disabled = true;
-  prog.style.display = '';
-
-  let success = 0, failed = 0;
-  for (let i = 0; i < rows.length; i++) {
+  btn.disabled=true; prog.style.display='';
+  let success=0, failed=0;
+  for (let i=0; i<rows.length; i++) {
     prog.textContent = `מייבא ${i+1} מתוך ${rows.length}...`;
     const row = rows[i];
     try {
-      if (_importMode === 'supply') {
-        const data = {
-          owner_id: uid(),
-          date: row.date,
-          product_id: row._product_id,
-          qty: parseFloat(row.qty) || 0,
-          price: parseFloat(row.price) || 0,
-          supplier_id: row._supplier_id || null,
-          notes: row.notes || null,
-        };
-        const res = await sb('supply', { method: 'POST', body: data });
+      const details = Object.keys(row._details||{}).length ? row._details : undefined;
+      if (_importMode==='supply') {
+        const data = { owner_id:uid(), date:row.date, product_id:row._product_id,
+          qty:parseFloat(row.qty)||0, price:parseFloat(row.price)||0,
+          supplier_id:row._supplier_id||null, notes:row.notes||null,
+          ...(details?{details}:{}) };
+        const res = await sb('supply',{method:'POST',body:data});
         supply.unshift(res[0]);
       } else {
-        const data = {
-          owner_id: uid(),
-          date: row.date,
-          product_id: row._product_id,
-          count: parseFloat(row.count) || 0,
-          notes: row.notes || null,
-        };
-        const res = await sb('counts', { method: 'POST', body: data });
+        const data = { owner_id:uid(), date:row.date, product_id:row._product_id,
+          count:parseFloat(row.count)||0, notes:row.notes||null,
+          ...(details?{details}:{}) };
+        const res = await sb('counts',{method:'POST',body:data});
         counts.unshift(res[0]);
       }
       success++;
     } catch(e) { failed++; }
   }
-
-  btn.disabled = false;
-  prog.style.display = 'none';
-
-  // עדכון תצוגה
+  btn.disabled=false; prog.style.display='none';
   renderDashboard();
-  if (_importMode === 'supply') renderSupply();
-  else renderCounts();
-
-  // שלב 4 — סיום
+  if (_importMode==='supply') renderSupply(); else renderCounts();
   document.getElementById('import-done-msg').textContent = `✅ יובאו ${success} שורות בהצלחה`;
-  document.getElementById('import-done-sub').textContent = failed
-    ? `${failed} שורות נכשלו — ניתן לנסות שוב`
-    : 'כל הנתונים נשמרו במערכת';
+  document.getElementById('import-done-sub').textContent = failed ? `${failed} שורות נכשלו` : 'כל הנתונים נשמרו';
   importGoStep(4);
 }
 </script>
