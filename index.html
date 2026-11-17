@@ -258,6 +258,7 @@ tr:hover td { background: var(--surface2); }
   <div class="top-bar">
     <div class="top-title">המרכז מלאי</div>
     <span class="top-user" id="top-user-name"></span>
+    <button class="btn-sm" onclick="openGuide()" title="הדרכה למשתמש" style="background:var(--accent-lt);color:var(--accent);border-color:var(--accent)">❓ הדרכה</button>
     <button class="btn-sm" onclick="signOut()">יציאה</button>
   </div>
   <div class="tabs" id="tabs-bar">
@@ -274,7 +275,10 @@ tr:hover td { background: var(--surface2); }
 
     <!-- DASHBOARD -->
     <div id="tab-dashboard" class="panel active">
-      <div class="section-title">לוח בקרה</div>
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>לוח בקרה</span>
+        <button class="btn-sm" onclick="openInsights()" style="background:linear-gradient(135deg,#3b5bdb,#7048e8);color:#fff;border:none;font-size:.82rem;padding:6px 14px">💡 תובנות חכמות</button>
+      </div>
       <div class="tiles" id="dash-tiles"></div>
       <!-- חיפוש חכם -->
       <div class="card" style="margin-bottom:16px">
@@ -445,6 +449,16 @@ tr:hover td { background: var(--surface2); }
     <div class="form-group"><label>ספק</label><select id="prod-vendor"></select></div>
     <div class="form-group"><label>מחיר</label><input type="number" id="prod-price" step="0.01"></div>
     <div class="form-group"><label>הערות</label><textarea id="prod-notes" rows="2"></textarea></div>
+    <!-- סטטוס מוצר: פעיל / לא פעיל -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px 14px;margin-top:4px">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+        <input type="checkbox" id="prod-active" checked style="margin-top:3px;width:16px;height:16px;cursor:pointer;accent-color:var(--accent)">
+        <div>
+          <div style="font-weight:600;font-size:.88rem">מוצר פעיל</div>
+          <div style="font-size:.78rem;color:var(--fg3);margin-top:2px">מוצר לא פעיל = הגעה לסיום — לא יוצג כ"חסר במלאי" בלוח הבקרה, אך יישאר בכל הדוחות עם סימון מיוחד</div>
+        </div>
+      </label>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-product')">ביטול</button>
       <button class="btn btn-primary" onclick="saveProduct()">שמור</button>
@@ -601,9 +615,12 @@ tr:hover td { background: var(--surface2); }
     </div>
     <div id="invite-link-box" style="display:none;margin-top:12px;background:var(--ok-lt);border-radius:var(--rs);padding:12px">
       <div style="font-size:.82rem;font-weight:700;color:var(--ok);margin-bottom:6px">✓ ההזמנה נוצרה! שלח את הקישור הזה למשתמש:</div>
-      <div style="display:flex;gap:6px;align-items:center">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
         <input id="invite-link-url" readonly style="flex:1;font-size:.78rem;padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);direction:ltr">
         <button class="btn-sm" onclick="copyInviteLink()">העתק</button>
+      </div>
+      <div style="font-size:.76rem;color:var(--ok);line-height:1.5">
+        <strong>מה המשתמש צריך לעשות:</strong> לפתוח את הקישור בדפדפן ← להזין שם + סיסמה ← להיכנס עם האימייל והסיסמה שהגדיר
       </div>
     </div>
   </div>
@@ -615,11 +632,40 @@ tr:hover td { background: var(--surface2); }
     <div class="modal-title">הגדרת סיסמה ראשונית</div>
     <p style="font-size:.88rem;color:var(--fg2);margin-bottom:16px">ברוך הבא! הגדר סיסמה לחשבון שלך.</p>
     <div class="form-group"><label>שם מלא</label><input id="sp-name" readonly style="background:var(--surface2)"></div>
-    <div class="form-group"><label>סיסמה חדשה *</label><input type="password" id="sp-pass" placeholder="לפחות 6 תווים"></div>
-    <div class="form-group"><label>אימות סיסמה *</label><input type="password" id="sp-pass2" placeholder="הקלד שוב"></div>
+    <div class="form-group"><label>סיסמה חדשה *</label><input type="password" id="sp-pass" placeholder="לפחות 6 תווים" autocomplete="new-password"></div>
+    <div class="form-group"><label>אימות סיסמה *</label><input type="password" id="sp-pass2" placeholder="הקלד שוב" autocomplete="new-password"></div>
     <div class="auth-err" id="sp-err"></div>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="completeInvite()">סיים הרשמה</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL הדרכה -->
+<div class="modal-backdrop" id="modal-guide">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-title">❓ מדריך למשתמש — המרכז מלאי</div>
+    <div id="guide-steps" style="max-height:60vh;overflow-y:auto">
+      <!-- steps rendered by JS -->
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:16px">
+      <button class="btn" id="guide-prev" onclick="guideNav(-1)">‹ הקודם</button>
+      <div style="flex:1;text-align:center;font-size:.8rem;color:var(--fg3)" id="guide-counter"></div>
+      <button class="btn btn-primary" id="guide-next" onclick="guideNav(1)">הבא ›</button>
+    </div>
+    <div style="text-align:center;margin-top:8px">
+      <button class="btn" onclick="closeModal('modal-guide')">סגור</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL תובנות -->
+<div class="modal-backdrop" id="modal-insights">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-title">💡 תובנות חכמות על המלאי</div>
+    <div id="insights-list" style="max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-insights')">סגור</button>
     </div>
   </div>
 </div>
@@ -753,20 +799,37 @@ const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 const fmtDate = d => { if (!d) return '—'; const [y,m,dd] = d.split('-'); return dd+'/'+m+'/'+(y||'').slice(2); };
 const fmtMoney = v => v == null ? '—' : (Number(v)<0?'-₪':'₪') + Math.abs(Number(v)).toLocaleString('he-IL',{minimumFractionDigits:0,maximumFractionDigits:2});
 
-// תאריך עברי מלא
+// תאריך עברי מלא — יום באותיות + חודש + שנה כתשפ"ח
 function fmtHebrewDate(dateStr) {
   if (!dateStr) return '';
   try {
     const [y,m,d] = dateStr.split('-').map(Number);
     const dt = new Date(y, m-1, d);
-    // קבל יום, חודש, שנה בנפרד בלוח עברי
-    const dayFmt  = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {day:'numeric'}).format(dt);
-    const monFmt  = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {month:'long'}).format(dt);
-    const yearFmt = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {year:'numeric'}).format(dt);
-    // נקה את המילה "בשנת" / "שנת" שמופיעה לפעמים בשנה
-    const yearClean = yearFmt.replace(/^(שנת\s*|בשנת\s*)/, '').trim();
-    // הרכב: כא תשרי תשפ"ז
-    return dayFmt + ' ' + monFmt + ' ' + yearClean;
+    const parts = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {day:'numeric',month:'long',year:'numeric'}).formatToParts(dt);
+    const dayNum  = parseInt(parts.find(p=>p.type==='day').value);
+    const monName = parts.find(p=>p.type==='month').value;
+    const yearNum = parseInt(parts.find(p=>p.type==='year').value);
+    // מערך אותיות ימים עבריים 1-30
+    const HEB_DAYS = ['','א','ב','ג','ד','ה','ו','ז','ח','ט','י','יא','יב','יג','יד','טו','טז','יז','יח','יט','כ','כא','כב','כג','כד','כה','כו','כז','כח','כט','ל'];
+    const dayHeb = HEB_DAYS[dayNum] || String(dayNum);
+    // המרת שנה לאותיות עבריות עם גרשיים
+    function yearToHebLetters(n) {
+      n = n % 1000;
+      const H = ['','ק','ר','ש','ת','תק','תר','תש','תת','תתק'];
+      const T = ['','י','כ','ל','מ','נ','ס','ע','פ','צ'];
+      const O = ['','א','ב','ג','ד','ה','ו','ז','ח','ט'];
+      const hundreds = Math.floor(n/100); n = n%100;
+      const tens = Math.floor(n/10); const ones = n%10;
+      let res = H[hundreds];
+      if (tens===1 && ones===5) res+='טו';
+      else if (tens===1 && ones===6) res+='טז';
+      else { res+=T[tens]; res+=O[ones]; }
+      // הוסף גרשיים לפני האות האחרונה (תשפ"ז), או גרש אם אות בודדת (ה')
+      if (res.length===1) res+="'";
+      else res = res.slice(0,-1) + '"' + res.slice(-1);
+      return res;
+    }
+    return dayHeb + "' " + monName + ' ' + yearToHebLetters(yearNum);
   } catch(e) { return ''; }
 }
 function fmtDateFull(dateStr) {
@@ -824,8 +887,10 @@ function showTab(name) {
 function renderDashboard() {
   const totalProd = products.length;
   const totalStock = products.reduce((s,p) => s + currentStock(p.id), 0);
-  const zeroStock = products.filter(p => currentStock(p.id) === 0);
-  const lowStockProds = products.filter(p => { const s = currentStock(p.id); return s > 0 && s <= 5; });
+  // מוצרים לא פעילים לא נספרים כ"אזל" או "מלאי נמוך"
+  const activeProds = products.filter(p => p.is_active !== false);
+  const zeroStock = activeProds.filter(p => currentStock(p.id) === 0);
+  const lowStockProds = activeProds.filter(p => { const s = currentStock(p.id); return s > 0 && s <= 5; });
   document.getElementById('dash-tiles').innerHTML =
     '<div class="tile"><div class="tile-label">מוצרים</div><div class="tile-val">' + totalProd + '</div></div>' +
     '<div class="tile"><div class="tile-label">סה"כ מלאי</div><div class="tile-val">' + totalStock.toLocaleString('he-IL') + '</div><div class="tile-sub">יחידות</div></div>' +
@@ -994,14 +1059,15 @@ function renderProducts() {
   document.getElementById('prod-tbody').innerHTML = list.length ? list.map(p => {
     const stk = currentStock(p.id);
     const sub = getSubcat(p.subcategory_id);
-    return '<tr>' +
-      '<td><strong>' + esc(p.name) + '</strong></td>' +
+    const inactive = p.is_active === false;
+    return '<tr' + (inactive ? ' style="opacity:.6"' : '') + '>' +
+      '<td><strong>' + esc(p.name) + '</strong>' + (inactive ? ' <span style="font-size:.7rem;background:var(--surface2);color:var(--fg3);padding:1px 6px;border-radius:8px;border:1px solid var(--border)">סיום</span>' : '') + '</td>' +
       '<td style="font-size:.8rem;direction:ltr">' + esc(p.barcode||'—') + '</td>' +
       '<td>' + catBadge(p.category_id) + '</td>' +
       '<td style="font-size:.8rem;color:var(--fg2)">' + esc(sub?.name||'—') + '</td>' +
       '<td>' + detailBadges(p) + '</td>' +
       '<td class="tbl-num">' + fmtMoney(p.price) + '</td>' +
-      '<td class="tbl-num" style="font-weight:700;color:' + (stk===0?'var(--err)':'var(--ok)') + '">' + stk + '</td>' +
+      '<td class="tbl-num" style="font-weight:700;color:' + (inactive?'var(--fg3)':(stk===0?'var(--err)':'var(--ok)')) + '">' + stk + '</td>' +
       '<td><button class="btn-sm" onclick="editProduct(\'' + p.id + '\')">עריכה</button> <button class="btn-sm btn-danger" onclick="deleteProduct(\'' + p.id + '\')">מחק</button></td>' +
       '</tr>';
   }).join('') : '<tr><td colspan="8"><div class="empty">אין מוצרים</div></td></tr>';
@@ -1046,6 +1112,7 @@ function openProductModal(id) {
   document.getElementById('prod-barcode').value = p?.barcode || '';
   document.getElementById('prod-price').value = p?.price || '';
   document.getElementById('prod-notes').value = p?.notes || '';
+  document.getElementById('prod-active').checked = p ? (p.is_active !== false) : true;
   const catSel = document.getElementById('prod-cat');
   catSel.innerHTML = '<option value="">ללא קטגוריה</option>' + categories.map(c => '<option value="' + c.id + '"' + (c.id===p?.category_id?' selected':'') + '>' + esc(c.name) + '</option>').join('');
   const subSel = document.getElementById('prod-subcat');
@@ -1092,7 +1159,8 @@ async function saveProduct() {
     supplier_id: document.getElementById('prod-vendor').value || null,
     price: parseFloat(document.getElementById('prod-price').value) || 0,
     notes: document.getElementById('prod-notes').value.trim() || null,
-    details: Object.keys(details).length ? details : null
+    details: Object.keys(details).length ? details : null,
+    is_active: document.getElementById('prod-active').checked
   };
   try {
     if (id) {
@@ -1705,7 +1773,9 @@ function renderSubcatDetailTypesList() {
     const typeLabel = dt.inputType === 'number' ? '🔢 מספר' : (avStr ? '📋 רשימה' : '📝 טקסט');
     const typeBg = dt.inputType === 'number' ? '#e8f4ff' : (avStr ? '#f0f7ee' : '#fdf6e8');
     const typeColor = dt.inputType === 'number' ? '#1a73e8' : (avStr ? '#2e7d32' : '#e65100');
-    return '<div style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px;margin-bottom:6px">' +
+    return '<div draggable="true" data-dt-idx="' + idx + '" style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px;margin-bottom:6px;cursor:grab" ' +
+      'ondragstart="dtDragStart(event,' + idx + ')" ondragover="dtDragOver(event)" ondrop="dtDrop(event,' + idx + ')" ondragend="dtDragEnd(event)">' +
+      '<span style="color:var(--fg3);font-size:1rem;cursor:grab;user-select:none" title="גרור לשינוי סדר">⠿</span>' +
       '<div style="flex:1">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:' + (avStr?'4':'0') + 'px">' +
           '<strong style="font-size:.9rem">' + esc(dt.label) + '</strong>' +
@@ -1717,6 +1787,8 @@ function renderSubcatDetailTypesList() {
       '<button class="btn-sm btn-danger" onclick="removeSubcatDetailType(' + idx + ')" title="הסר שדה" style="padding:3px 8px">✕</button>' +
       '</div>';
   }).join('');
+  // הוסף drag handlers אחרי הרנדור
+  if (!window._dtDragSrc) window._dtDragSrc = -1;
 }
 
 function showAddDetailTypeForm(editIdx) {
@@ -1777,6 +1849,34 @@ function removeSubcatDetailType(idx) {
   if (!window._subcatDetailTypes) return;
   window._subcatDetailTypes.splice(idx, 1);
   renderSubcatDetailTypesList();
+}
+
+// drag-to-reorder שדות תת-קטגוריה
+let _dtDragSrc = -1;
+function dtDragStart(e, idx) {
+  _dtDragSrc = idx;
+  e.currentTarget.style.opacity = '0.5';
+  e.dataTransfer.effectAllowed = 'move';
+}
+function dtDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  // highlight
+  document.querySelectorAll('[data-dt-idx]').forEach(el => el.style.borderColor = '');
+  e.currentTarget.style.borderColor = 'var(--accent)';
+}
+function dtDrop(e, toIdx) {
+  e.preventDefault();
+  if (_dtDragSrc === toIdx || _dtDragSrc < 0) return;
+  const arr = window._subcatDetailTypes || [];
+  const moved = arr.splice(_dtDragSrc, 1)[0];
+  arr.splice(toIdx, 0, moved);
+  window._subcatDetailTypes = arr;
+  renderSubcatDetailTypesList();
+}
+function dtDragEnd(e) {
+  _dtDragSrc = -1;
+  document.querySelectorAll('[data-dt-idx]').forEach(el => { el.style.opacity = ''; el.style.borderColor = ''; });
 }
 
 function openSubcatModal(catId, id) {
@@ -2024,13 +2124,10 @@ async function createInvite() {
   try {
     const rows = await sb('user_invites', {
       method: 'POST',
-      body: { owner_id: uid(), email, full_name: name },
+      body: { owner_id: uid(), email, full_name: name, role, can_edit: canEdit, allowed_categories: allowedCats },
     });
     const invite = rows?.[0];
     if (!invite) throw new Error('לא נוצרה הזמנה');
-    // שמור הרשאות כ-"pending" ב-metadata
-    window._pendingInvitePerms = window._pendingInvitePerms || {};
-    window._pendingInvitePerms[invite.token] = { role, canEdit, allowedCats };
 
     const link = location.origin + '/?invite=' + invite.token;
     document.getElementById('invite-link-url').value = link;
@@ -2092,13 +2189,12 @@ async function completeInvite() {
     const authData = await sbAuth('signup', { email: invite.email, password: pass });
     const userId = authData.user?.id;
     if (!userId) throw new Error('שגיאה ביצירת חשבון');
-    // שמור record עם הרשאות
-    const perms = window._pendingInvitePerms?.[invite.token] || {};
+    // שמור record עם הרשאות — נקרא מה-invite record עצמו שכולל role/can_edit/allowed_categories
     await sb('users', { method: 'POST', body: {
       id: userId, email: invite.email, full_name: invite.full_name,
-      role: perms.role || 'user', owner_id: invite.owner_id,
-      can_edit: perms.canEdit !== false,
-      allowed_categories: perms.allowedCats || null
+      role: invite.role || 'user', owner_id: invite.owner_id,
+      can_edit: invite.can_edit !== false,
+      allowed_categories: invite.allowed_categories || null
     }});
     // סמן הזמנה כנוצלה
     await sb('user_invites?id=eq.' + invite.id, { method: 'PATCH', body: { used: true }, prefer: 'return=minimal' });
@@ -2129,7 +2225,10 @@ function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
 }
 document.querySelectorAll('.modal-backdrop').forEach(el => {
-  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+  // רק mousedown ישירות על הbackdrop (לא על ה-modal פנימה) יסגור
+  let _bdDown = false;
+  el.addEventListener('mousedown', e => { _bdDown = e.target === el; });
+  el.addEventListener('click', e => { if (e.target === el && _bdDown) el.classList.remove('open'); _bdDown = false; });
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop.open').forEach(el => el.classList.remove('open'));
@@ -2137,6 +2236,243 @@ document.addEventListener('keydown', e => {
 
 // Enter to login
 document.getElementById('auth-pass').addEventListener('keydown', e => { if (e.key === 'Enter') signIn(); });
+
+// ══════════════════════════════════════════
+//  GUIDE (הדרכה)
+// ══════════════════════════════════════════
+const GUIDE_STEPS = [
+  {
+    title: '1️⃣ הקמת קטגוריה ותת-קטגוריה',
+    content: `<p>כל מוצר שייך <strong>לקטגוריה</strong> (למשל: חולצות, מכנסיים) ולאופציה — <strong>תת-קטגוריה</strong> (למשל: חולצות גברים, חולצות נשים).</p>
+<p><strong>איך מקימים:</strong></p>
+<ol>
+  <li>עבור ללשונית <em>"קטגוריות"</em></li>
+  <li>לחץ <em>"+ קטגוריה חדשה"</em> ורשום שם</li>
+  <li>לחץ <em>"+ תת-קטגוריה"</em> ליד הקטגוריה שיצרת</li>
+</ol>
+<p>💡 <em>טיפ:</em> ניתן לצרף <strong>שדות פרטים</strong> לתת-קטגוריה (ראה שלב הבא).</p>`
+  },
+  {
+    title: '2️⃣ הגדרת שדות פרטים נוספים למוצר',
+    content: `<p>כל תת-קטגוריה יכולה לכלול <strong>שדות מותאמים</strong> שיופיעו בכל מוצר, ספירה ואספקה בה.</p>
+<p><strong>סוגי שדות:</strong></p>
+<ul>
+  <li>📝 <strong>טקסט חופשי</strong> — כל תוכן (צבע, הערה…)</li>
+  <li>🔢 <strong>מספר</strong> — מידה מספרית (מידה 42, גובה 160…)</li>
+  <li>📋 <strong>רשימה</strong> — בחירה מתוך ערכים שתגדיר (S/M/L/XL)</li>
+</ul>
+<p><strong>איך מוסיפים:</strong> עריכת תת-קטגוריה ← "+ הוסף שדה פרט" ← בחר שם וסוג ← שמור.<br>
+<em>ניתן לגרור שדות לסידור מחדש ולערוך בכל עת.</em></p>`
+  },
+  {
+    title: '3️⃣ בניית מוצר',
+    content: `<p>לחץ על לשונית <strong>"מוצרים"</strong> ← <strong>"+ מוצר חדש"</strong>.</p>
+<p><strong>שדות חשובים:</strong></p>
+<ul>
+  <li>שם מוצר ← חובה</li>
+  <li>ברקוד ← אופציונלי, לסריקה מהירה</li>
+  <li>קטגוריה + תת-קטגוריה ← בחירה מהרשימה</li>
+  <li>פרטים נוספים ← מופיעים לפי תת-הקטגוריה שנבחרה</li>
+  <li>מחיר ← מחיר קנייה/מכירה לצרכי דוחות</li>
+  <li>✅ <strong>מוצר פעיל</strong> ← בטל סימון אם המוצר הגיע לסיום — לא יופיע בהתרעות מלאי נמוך</li>
+</ul>`
+  },
+  {
+    title: '4️⃣ ייבוא מוצרים',
+    content: `<p>ניתן לייבא מוצרים רבים בבת אחת דרך קובץ <strong>CSV</strong>.</p>
+<p><strong>עמודות נדרשות בCSV:</strong> <code>name</code>, <code>barcode</code>, <code>category</code>, <code>subcategory</code>, <code>price</code>, <code>notes</code></p>
+<p><strong>איך מייבאים:</strong></p>
+<ol>
+  <li>לשונית "מוצרים" ← כפתור <em>"ייבוא CSV"</em></li>
+  <li>העלה קובץ CSV בעברית</li>
+  <li>המערכת תיצור קטגוריות חסרות אוטומטית</li>
+  <li>בדוק ואשר לפני השמירה</li>
+</ol>`
+  },
+  {
+    title: '5️⃣ הזנת ספירת מלאי (מלאי פתיחה)',
+    content: `<p>לפני שמתחילים לעקוב — יש להזין <strong>ספירת פתיחה</strong> לכל מוצר.</p>
+<p><strong>איך מזינים:</strong></p>
+<ol>
+  <li>לשונית <em>"ספירות"</em> ← "+ ספירה חדשה"</li>
+  <li>בחר תאריך + מוצר + כמות בפועל</li>
+  <li>הזן שדות פרטים מותאמים אם קיימים</li>
+  <li>המלאי הראשון שיוזן הוא <strong>מלאי הפתיחה</strong></li>
+</ol>
+<p>💡 ספירות חוזרות (כל שבוע/חודש) מאפשרות מעקב מדויק אחר שינויי מלאי.</p>`
+  },
+  {
+    title: '6️⃣ הזנת אספקה',
+    content: `<p>כל <strong>קנייה מספק</strong> מוזנת כ"אספקה".</p>
+<p><strong>איך מזינים:</strong></p>
+<ol>
+  <li>לשונית <em>"אספקות"</em> ← "+ אספקה חדשה"</li>
+  <li>תאריך + מוצר + כמות שהתקבלה + מחיר</li>
+  <li>האספקה מוסיפה מלאי בין שתי ספירות</li>
+</ol>`
+  },
+  {
+    title: '7️⃣ כיצד המערכת מחשבת מלאי',
+    content: `<p>המערכת עובדת לפי <strong>תקופות בין ספירות</strong>:</p>
+<div style="background:var(--surface2);border-radius:8px;padding:12px;margin:8px 0;font-size:.88rem;line-height:2">
+  📦 <strong>מלאי פתיחה</strong> = ספירה אחרונה לפני תחילת תקופה<br>
+  ➕ <strong>+ אספקות</strong> שהתקבלו בתקופה<br>
+  ➖ <strong>− מלאי סגירה</strong> = ספירה בסוף תקופה<br>
+  🟰 <strong>= נמכר</strong> (מחושב אוטומטית)<br>
+  💰 <strong>הכנסה</strong> = נמכר × מחיר מוצר
+</div>
+<p>המלאי <strong>הנוכחי</strong> = הספירה האחרונה + אספקות שהתקבלו אחריה.</p>`
+  },
+  {
+    title: '8️⃣ דוחות ותובנות',
+    content: `<p>לשונית <strong>"דוחות"</strong> מציגה ניתוח מפורט לפי תקופה וקטגוריה:</p>
+<ul>
+  <li>📊 ניתוח פתיחה/סגירה/נמכר/הכנסה לכל מוצר</li>
+  <li>🔍 סינון לפי קטגוריה ותת-קטגוריה</li>
+  <li>📥 הורדה לאקסל / הדפסה</li>
+  <li>💡 כפתור <strong>"תובנות חכמות"</strong> — ניתוח אוטומטי: מוצרים שאזלו, מחזור גבוה, מוצרים קפואים</li>
+</ul>
+<p>💡 ב<strong>לוח הבקרה</strong> תמיד תראה: סה"כ מוצרים, מלאי, ומוצרים שאזלו או נמוכים.</p>`
+  }
+];
+
+let _guideStep = 0;
+function openGuide() {
+  _guideStep = 0;
+  renderGuideStep();
+  document.getElementById('modal-guide').classList.add('open');
+}
+function renderGuideStep() {
+  const step = GUIDE_STEPS[_guideStep];
+  document.getElementById('guide-steps').innerHTML =
+    '<div style="background:var(--accent-lt);border-radius:var(--rs);padding:14px 18px;margin-bottom:14px">' +
+    '<div style="font-size:1rem;font-weight:800;color:var(--accent);margin-bottom:10px">' + step.title + '</div>' +
+    '<div style="font-size:.88rem;color:var(--fg);line-height:1.75">' + step.content + '</div>' +
+    '</div>' +
+    // כל השלבים בתחתית כנקודות
+    '<div style="display:flex;justify-content:center;gap:6px;padding:8px 0">' +
+    GUIDE_STEPS.map((_, i) => '<div onclick="guideGo(' + i + ')" style="width:8px;height:8px;border-radius:50%;background:' + (i===_guideStep?'var(--accent)':'var(--border)') + ';cursor:pointer"></div>').join('') +
+    '</div>';
+  document.getElementById('guide-counter').textContent = (_guideStep+1) + ' / ' + GUIDE_STEPS.length;
+  document.getElementById('guide-prev').disabled = _guideStep === 0;
+  document.getElementById('guide-next').textContent = _guideStep === GUIDE_STEPS.length-1 ? '✓ סיום' : 'הבא ›';
+  document.getElementById('guide-next').onclick = _guideStep === GUIDE_STEPS.length-1 ? () => closeModal('modal-guide') : () => guideNav(1);
+}
+function guideNav(dir) {
+  _guideStep = Math.max(0, Math.min(GUIDE_STEPS.length-1, _guideStep + dir));
+  renderGuideStep();
+}
+function guideGo(i) { _guideStep = i; renderGuideStep(); }
+
+// ══════════════════════════════════════════
+//  SMART INSIGHTS (תובנות חכמות)
+// ══════════════════════════════════════════
+function openInsights() {
+  const insightsList = document.getElementById('insights-list');
+  insightsList.innerHTML = '<div class="spinner">מנתח נתונים...</div>';
+  document.getElementById('modal-insights').classList.add('open');
+  setTimeout(() => {
+    const insights = generateInsights();
+    insightsList.innerHTML = insights.length
+      ? insights.map(ins =>
+          '<div style="background:' + ins.bg + ';border:1px solid ' + ins.border + ';border-radius:var(--rs);padding:14px 16px;margin-bottom:10px">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+            '<span style="font-size:1.2rem">' + ins.icon + '</span>' +
+            '<strong style="font-size:.9rem;color:' + ins.color + '">' + esc(ins.title) + '</strong>' +
+          '</div>' +
+          '<div style="font-size:.82rem;color:var(--fg2);line-height:1.6">' + ins.body + '</div>' +
+          (ins.reason ? '<div style="font-size:.76rem;color:var(--fg3);margin-top:6px;padding-top:6px;border-top:1px solid ' + ins.border + '">🔍 ' + ins.reason + '</div>' : '') +
+          '</div>'
+        ).join('')
+      : '<div class="empty">אין תובנות כרגע — המלאי נראה תקין! ✓</div>';
+  }, 300);
+}
+
+function generateInsights() {
+  const insights = [];
+  const today = new Date().toISOString().slice(0,10);
+  const activeProds = products.filter(p => p.is_active !== false);
+
+  // 1. מוצרים שאזלו מהמלאי (פעילים)
+  const zeroProds = activeProds.filter(p => currentStock(p.id) === 0);
+  if (zeroProds.length) {
+    insights.push({
+      icon: '🚨', title: 'מוצרים שאזלו מהמלאי (' + zeroProds.length + ')',
+      bg: 'var(--err-lt)', border: 'var(--err)', color: 'var(--err)',
+      body: zeroProds.slice(0,5).map(p => '• ' + esc(p.name)).join('<br>') + (zeroProds.length>5 ? '<br>ועוד ' + (zeroProds.length-5) + '...' : ''),
+      reason: 'מוצרים אלה מוגדרים כפעילים אך אין להם מלאי — סביר שצריך להזמין מחדש.'
+    });
+  }
+
+  // 2. מלאי נמוך (1-5)
+  const lowProds = activeProds.filter(p => { const s=currentStock(p.id); return s>0&&s<=5; });
+  if (lowProds.length) {
+    insights.push({
+      icon: '⚡', title: 'מלאי נמוך — שקול להזמין (' + lowProds.length + ')',
+      bg: 'var(--warn-lt)', border: 'var(--warn)', color: 'var(--warn)',
+      body: lowProds.slice(0,5).map(p => '• ' + esc(p.name) + ' — נותרו ' + currentStock(p.id) + ' יח\'').join('<br>'),
+      reason: 'מלאי של 1-5 יחידות — בהתאם לקצב המכירות, יתכן שיאזל בקרוב.'
+    });
+  }
+
+  // 3. ניתוח מחזור — מוצרים שנמכרו הרבה ב-30 יום אחרונים
+  const d30 = new Date(); d30.setDate(d30.getDate()-30);
+  const from30 = d30.toISOString().slice(0,10);
+  const salesMap = {};
+  products.forEach(p => {
+    const sold = calcSold(p.id, from30, today);
+    if (sold > 0) salesMap[p.id] = sold;
+  });
+  const topSellers = Object.entries(salesMap).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  if (topSellers.length) {
+    insights.push({
+      icon: '🏆', title: 'המוצרים הנמכרים ביותר (30 יום אחרונים)',
+      bg: 'var(--ok-lt)', border: 'var(--ok)', color: 'var(--ok)',
+      body: topSellers.map(([id,qty]) => '• ' + esc(getProduct(id)?.name||'?') + ' — ' + qty + ' יח\' נמכרו').join('<br>'),
+      reason: 'מוצרים אלה בעלי מחזור גבוה — כדאי לוודא שיש מספיק מלאי בהישג יד.'
+    });
+  }
+
+  // 4. מוצרים קפואים — מלאי שלא זז 30 יום
+  const frozenProds = activeProds.filter(p => {
+    const stk = currentStock(p.id);
+    if (stk === 0) return false;
+    const recentSupply = supply.some(s => s.product_id===p.id && s.date>=from30);
+    const recentCount = counts.some(c => c.product_id===p.id && c.date>=from30);
+    return stk > 0 && !recentSupply && !recentCount;
+  });
+  if (frozenProds.length > 0) {
+    insights.push({
+      icon: '🧊', title: 'מלאי ללא תנועה 30 יום (' + frozenProds.length + ' מוצרים)',
+      bg: 'var(--surface2)', border: 'var(--border)', color: 'var(--fg2)',
+      body: frozenProds.slice(0,4).map(p => '• ' + esc(p.name) + ' — ' + currentStock(p.id) + ' יח\'').join('<br>'),
+      reason: 'לא נרשמה אספקה או ספירה למוצרים אלה ב-30 הימים האחרונים. ייתכן שהם מוצרים עם ביקוש נמוך — שקול האם כדאי להגדיר כ"סיום".'
+    });
+  }
+
+  // 5. מוצרים ללא ספירה מעולם
+  const noCountProds = activeProds.filter(p => !counts.some(c => c.product_id===p.id));
+  if (noCountProds.length) {
+    insights.push({
+      icon: '📋', title: 'מוצרים ללא ספירת מלאי (' + noCountProds.length + ')',
+      bg: 'var(--accent-lt)', border: 'var(--accent)', color: 'var(--accent)',
+      body: noCountProds.slice(0,4).map(p => '• ' + esc(p.name)).join('<br>') + (noCountProds.length>4 ? '<br>ועוד ' + (noCountProds.length-4) + '...' : ''),
+      reason: 'לא הוזנה ספירת פתיחה למוצרים אלה — ללא ספירה, המערכת לא יכולה לחשב מלאי ומכירות מדויקים.'
+    });
+  }
+
+  return insights;
+}
+
+function calcSold(productId, from, to) {
+  // opening + supply - closing
+  const openingC = counts.filter(c => c.product_id===productId && c.date<from).sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const closing = counts.filter(c => c.product_id===productId && c.date>=from && c.date<=to).sort((a,b)=>b.date.localeCompare(a.date))[0];
+  if (!closing) return 0;
+  const opening = openingC ? (openingC.count||openingC.quantity||0) : 0;
+  const supplyQty = supply.filter(s => s.product_id===productId && s.date>=from && s.date<=to).reduce((sum,s)=>sum+(s.qty||s.quantity||0),0);
+  return Math.max(0, opening + supplyQty - (closing.count||closing.quantity||0));
+}
 
 // בדיקת טוקן הזמנה בטעינת הדף
 (async () => {
