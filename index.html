@@ -280,6 +280,14 @@ tr:hover td { background: var(--surface2); }
         <button class="btn-sm" onclick="openInsights()" style="background:linear-gradient(135deg,#3b5bdb,#7048e8);color:#fff;border:none;font-size:.82rem;padding:6px 14px">💡 תובנות חכמות</button>
       </div>
       <div class="tiles" id="dash-tiles"></div>
+      <!-- טווח מכירות -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-hd">📈 מכירות בטווח</div>
+        <div class="card-body">
+          <div id="dash-range-section"></div>
+          <div id="dash-sold-section"></div>
+        </div>
+      </div>
       <!-- חיפוש חכם -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-hd">🔍 חיפוש מוצרים מהיר</div>
@@ -873,10 +881,52 @@ function stockAt(productId, date) {
   const lastDate = relCounts[0].date;
   return relCounts.filter(c => c.date === lastDate).reduce((s,c) => s + (Number(c.count)||0), 0);
 }
+
+// מלאי פתיחה = ספירה אחרונה לפני תחילת הטווח (לא כולל יום הפתיחה)
+function openingStockInfo(productId, rangeStart) {
+  const before = counts.filter(c => c.product_id === productId && c.date < rangeStart)
+    .sort((a,b) => b.date.localeCompare(a.date));
+  if (!before.length) return { qty: 0, date: null, dateHeb: null };
+  const lastDate = before[0].date;
+  const qty = before.filter(c => c.date === lastDate).reduce((s,c) => s + (Number(c.count)||0), 0);
+  return { qty, date: lastDate, dateHeb: fmtHebrewDate(lastDate) };
+}
+
+// מלאי סגירה = ספירה אחרונה בתוך הטווח (כולל יום הסגירה)
+function closingStockInfo(productId, rangeStart, rangeEnd) {
+  const inRange = counts.filter(c => c.product_id === productId && c.date >= rangeStart && c.date <= rangeEnd)
+    .sort((a,b) => b.date.localeCompare(a.date));
+  if (!inRange.length) return { qty: 0, date: null, dateHeb: null };
+  const lastDate = inRange[0].date;
+  const qty = inRange.filter(c => c.date === lastDate).reduce((s,c) => s + (Number(c.count)||0), 0);
+  // ספירות ביניים (לא הראשונה ולא האחרונה)
+  const allDates = [...new Set(inRange.map(c => c.date))].sort();
+  const hasMiddle = allDates.length > 1;
+  return { qty, date: lastDate, dateHeb: fmtHebrewDate(lastDate), hasMiddle, middleCount: allDates.length - 1 };
+}
+
 function supplyInRange(productId, from, to) {
-  return supply.filter(s => s.product_id === productId && s.date > from && s.date <= to)
+  return supply.filter(s => s.product_id === productId && s.date >= from && s.date <= to)
     .reduce((s,x) => s + (Number(x.qty)||0), 0);
 }
+
+// מידע מפורט על אספקות בטווח
+function supplyInfoInRange(productId, from, to) {
+  const items = supply.filter(s => s.product_id === productId && s.date >= from && s.date <= to);
+  const qty = items.reduce((s,x) => s + (Number(x.qty)||0), 0);
+  const dates = [...new Set(items.map(s => s.date))].sort();
+  return { qty, dates };
+}
+
+// חישוב מכירות מלא עם מידע עזר
+function soldInRange(productId, from, to) {
+  const opening = openingStockInfo(productId, from);
+  const closing = closingStockInfo(productId, from, to);
+  const supplyInfo = supplyInfoInRange(productId, from, to);
+  const sold = opening.qty + supplyInfo.qty - closing.qty;
+  return { sold, opening, closing, supply: supplyInfo };
+}
+
 function currentStock(productId) { return stockAt(productId, '9999-12-31'); }
 
 // ══════════════════════════════════════════
@@ -900,7 +950,38 @@ function showTab(name) {
 // ══════════════════════════════════════════
 //  DASHBOARD
 // ══════════════════════════════════════════
+// --- לוח בקרה: בורר טווח ---
+let _dashRangeFrom = null;
+let _dashRangeTo = null;
+
+function dashRangeInit() {
+  // ברירת מחדל: 30 יום אחרונים
+  if (!_dashRangeFrom) {
+    const today = new Date();
+    const from30 = new Date(today);
+    from30.setDate(today.getDate() - 29);
+    _dashRangeTo = today.toISOString().slice(0,10);
+    _dashRangeFrom = from30.toISOString().slice(0,10);
+  }
+  const fromEl = document.getElementById('dash-range-from');
+  const toEl = document.getElementById('dash-range-to');
+  if (fromEl && !fromEl.value) fromEl.value = _dashRangeFrom;
+  if (toEl && !toEl.value) toEl.value = _dashRangeTo;
+}
+
+function dashRangeChange() {
+  const fromEl = document.getElementById('dash-range-from');
+  const toEl = document.getElementById('dash-range-to');
+  if (fromEl?.value) _dashRangeFrom = fromEl.value;
+  if (toEl?.value) _dashRangeTo = toEl.value;
+  renderDashboard();
+}
+
 function renderDashboard() {
+  dashRangeInit();
+  const from = _dashRangeFrom;
+  const to = _dashRangeTo;
+
   const totalProd = products.length;
   const totalStock = products.reduce((s,p) => s + currentStock(p.id), 0);
   // מוצרים לא פעילים לא נספרים כ"אזל" או "מלאי נמוך"
@@ -913,6 +994,58 @@ function renderDashboard() {
     '<div class="tile ' + (zeroStock.length?'err':'ok') + '"><div class="tile-label">אזל מהמלאי</div><div class="tile-val">' + zeroStock.length + '</div></div>' +
     '<div class="tile ' + (lowStockProds.length?'warn':'') + '"><div class="tile-label">מלאי נמוך</div><div class="tile-val">' + lowStockProds.length + '</div></div>' +
     '<div class="tile"><div class="tile-label">ספקים</div><div class="tile-val">' + suppliers.length + '</div></div>';
+
+  // --- בורר טווח ומכירות בטווח ---
+  const hebFrom = from ? fmtHebrewDate(from) : '';
+  const hebTo = to ? fmtHebrewDate(to) : '';
+  const rangeEl = document.getElementById('dash-range-section');
+  if (rangeEl) {
+    rangeEl.innerHTML =
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">' +
+      '<span style="font-size:.85rem;color:var(--fg2);font-weight:600">📊 מכירות בטווח:</span>' +
+      '<label style="font-size:.82rem;color:var(--fg3)">מ: <input type="date" id="dash-range-from" value="' + (from||'') + '" onchange="dashRangeChange()" style="border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--surface1);color:var(--fg1);font-size:.82rem"></label>' +
+      '<label style="font-size:.82rem;color:var(--fg3)">עד: <input type="date" id="dash-range-to" value="' + (to||'') + '" onchange="dashRangeChange()" style="border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--surface1);color:var(--fg1);font-size:.82rem"></label>' +
+      (hebFrom ? '<span style="font-size:.76rem;color:var(--fg3)">' + hebFrom + ' — ' + (hebTo||'') + '</span>' : '') +
+      '</div>';
+  }
+
+  // חישוב מכירות בטווח לכל מוצר
+  if (from && to) {
+    let totalSold = 0, totalRevenue = 0;
+    // מציאת תאריכי ספירות שבהן השתמשנו
+    const usedOpenDates = new Set();
+    const usedCloseDates = new Set();
+    const usedSupplyDates = new Set();
+    activeProds.forEach(p => {
+      const info = soldInRange(p.id, from, to);
+      if (info.sold > 0) {
+        totalSold += info.sold;
+        totalRevenue += info.sold * (p.price || 0);
+      }
+      if (info.opening.date) usedOpenDates.add(info.opening.date);
+      if (info.closing.date) usedCloseDates.add(info.closing.date);
+      info.supply.dates.forEach(d => usedSupplyDates.add(d));
+    });
+    const sortedOpenDates = [...usedOpenDates].sort();
+    const sortedCloseDates = [...usedCloseDates].sort();
+    const sortedSupplyDates = [...usedSupplyDates].sort();
+
+    const soldEl = document.getElementById('dash-sold-section');
+    if (soldEl) {
+      soldEl.innerHTML =
+        '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px 16px;margin-bottom:14px">' +
+        '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:8px">' +
+        '<div class="tile ok" style="margin:0;min-width:100px"><div class="tile-label">נמכר בטווח</div><div class="tile-val">' + totalSold.toLocaleString('he-IL') + '</div><div class="tile-sub">יחידות</div></div>' +
+        '<div class="tile ok" style="margin:0;min-width:120px"><div class="tile-label">הכנסה מוערכת</div><div class="tile-val" style="font-size:.95rem">' + fmtMoney(totalRevenue) + '</div></div>' +
+        '</div>' +
+        '<div style="font-size:.78rem;color:var(--fg3);line-height:1.8">' +
+        (sortedOpenDates.length ? '📅 ספירות פתיחה: <strong>' + sortedOpenDates.map(d=>'<span title="' + (fmtHebrewDate(d)||'') + '">' + fmtDate(d) + '</span>').join(', ') + '</strong>' : '📅 אין ספירת פתיחה') +
+        ' &nbsp;|&nbsp; ' +
+        (sortedCloseDates.length ? '📅 ספירות סגירה: <strong>' + sortedCloseDates.map(d=>'<span title="' + (fmtHebrewDate(d)||'') + '">' + fmtDate(d) + '</span>').join(', ') + '</strong>' : '📅 אין ספירת סגירה') +
+        (sortedSupplyDates.length ? '<br>📦 אספקות בטווח: <strong>' + sortedSupplyDates.map(fmtDate).join(', ') + '</strong>' : '') +
+        '</div></div>';
+    }
+  }
 
   // סיכום לפי קטגוריות
   const catSummaryHtml = categories.map(cat => {
@@ -1474,31 +1607,30 @@ function renderReport() {
   let tO=0, tA=0, tC=0, tS=0, tP=0;
 
   const rows = list.map(p => {
-    const o = stockAt(p.id, from);
-    const a = supplyInRange(p.id, from, to);
-    const c = stockAt(p.id, to);
-    const s = o + a - c;
+    const info = soldInRange(p.id, from, to);
+    const o = info.opening.qty;
+    const a = info.supply.qty;
+    const c = info.closing.qty;
+    const s = info.sold;
     tO+=o; tA+=a; tC+=c; tS+=s; tP += s*(p.price||0);
-    return { p, o, a, c, s, pay: s*(p.price||0) };
+    return { p, o, a, c, s, pay: s*(p.price||0), info };
   }).filter(r => r.o || r.a || r.c || r.s);
 
   // מידע חכם על הדוח
-  const supplyInPeriod = supply.filter(s => s.date >= from && s.date <= to && (!catF || getProduct(s.product_id)?.category_id === catF) && (!subcatF || getProduct(s.product_id)?.subcategory_id === subcatF));
-  const countsInPeriod = counts.filter(c => c.date >= from && c.date <= to && (!catF || getProduct(c.product_id)?.category_id === catF) && (!subcatF || getProduct(c.product_id)?.subcategory_id === subcatF));
-  const supplyDates = [...new Set(supplyInPeriod.map(s=>s.date))].sort();
-  const countDates  = [...new Set(countsInPeriod.map(c=>c.date))].sort();
-  const openingCountDate = countDates.find(d => d <= from) || (countDates.length ? countDates[0] : null);
-  const closingCountDate = [...countDates].reverse().find(d => d <= to) || null;
   const insightEl = document.getElementById('rp-insight');
   if (insightEl && rows.length) {
     const turnover = tO > 0 ? Math.round((tS/tO)*100) : null;
-    insightEl.innerHTML = '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px 16px;font-size:.82rem;color:var(--fg2);line-height:1.8">' +
-      '<strong style="color:var(--fg1);font-size:.85rem">📊 סיכום תקופה</strong> &nbsp;' +
-      (supplyDates.length ? '📦 אספקות: <strong>' + supplyDates.length + '</strong> תאריכים שונים (' + supplyDates.map(fmtDate).join(', ') + ')' : '📦 לא נרשמו אספקות בתקופה') +
+    // ספירות פתיחה/סגירה ייחודיות
+    const openDates = [...new Set(rows.map(r=>r.info.opening.date).filter(Boolean))].sort();
+    const closeDates = [...new Set(rows.map(r=>r.info.closing.date).filter(Boolean))].sort();
+    const supplyDatesAll = [...new Set(rows.flatMap(r=>r.info.supply.dates))].sort();
+    insightEl.innerHTML = '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px 16px;font-size:.82rem;color:var(--fg2);line-height:1.9">' +
+      '<strong style="color:var(--fg1);font-size:.85rem">📊 סיכום תקופה</strong><br>' +
+      (openDates.length ? '📅 ספירת פתיחה: <strong>' + openDates.map(d=>'<span title="' + (fmtHebrewDate(d)||'') + '">' + fmtDate(d) + '</span>').join(', ') + '</strong>' : '📅 אין ספירת פתיחה לתקופה') +
       ' &nbsp;|&nbsp; ' +
-      (countDates.length ? '🔢 ספירות: <strong>' + countDates.length + '</strong> תאריכים (' + countDates.map(fmtDate).join(', ') + ')' : '🔢 לא נרשמו ספירות מלאי') +
-      (openingCountDate && openingCountDate <= from ? ' &nbsp;|&nbsp; מלאי פתיחה מתאריך: <strong>' + fmtDate(openingCountDate) + '</strong>' : '') +
-      (closingCountDate ? ' &nbsp;|&nbsp; מלאי סגירה מתאריך: <strong>' + fmtDate(closingCountDate) + '</strong>' : '') +
+      (closeDates.length ? '📅 ספירת סגירה: <strong>' + closeDates.map(d=>'<span title="' + (fmtHebrewDate(d)||'') + '">' + fmtDate(d) + '</span>').join(', ') + '</strong>' : '📅 אין ספירת סגירה') +
+      '<br>' +
+      (supplyDatesAll.length ? '📦 אספקות בתקופה: <strong>' + supplyDatesAll.length + '</strong> תאריכים (' + supplyDatesAll.map(fmtDate).join(', ') + ')' : '📦 לא נרשמו אספקות בתקופה') +
       (turnover !== null ? ' &nbsp;|&nbsp; מחזור מלאי: <strong>' + turnover + '%</strong>' : '') +
       '</div>';
   } else if (insightEl) insightEl.innerHTML = '';
@@ -1508,7 +1640,7 @@ function renderReport() {
     '<div class="tile"><div class="tile-label">מלאי פתיחה</div><div class="tile-val">' + tO + '</div></div>' +
     '<div class="tile"><div class="tile-label">קניות (אספקה)</div><div class="tile-val" style="color:var(--accent)">' + tA + '</div></div>' +
     '<div class="tile"><div class="tile-label">מלאי סגירה</div><div class="tile-val">' + tC + '</div></div>' +
-    '<div class="tile ok"><div class="tile-label">נמכר</div><div class="tile-val">' + tS + '</div></div>' +
+    '<div class="tile ' + (tS < 0 ? 'err' : 'ok') + '"><div class="tile-label">נמכר</div><div class="tile-val">' + tS + '</div></div>' +
     '<div class="tile ok"><div class="tile-label">הכנסה</div><div class="tile-val" style="font-size:1rem">' + fmtMoney(tP) + '</div></div>';
 
   if (!rows.length) {
@@ -1517,38 +1649,11 @@ function renderReport() {
     return;
   }
 
-  // טבלת מוצרים עם פרטים נוספים
-  document.getElementById('rp-table').innerHTML = '<div class="card"><div class="tbl-wrap"><table>' +
-    '<thead><tr>' +
-    '<th>מוצר</th><th>פרטים</th><th>קטגוריה</th>' +
-    '<th style="text-align:center">פתיחה</th>' +
-    '<th style="text-align:center;color:var(--accent)">קניות</th>' +
-    '<th style="text-align:center">סגירה</th>' +
-    '<th style="text-align:center;color:var(--ok)">נמכר</th>' +
-    '<th style="text-align:left">הכנסה</th>' +
-    '</tr></thead><tbody>' +
-    rows.map(r => {
-      const badges = detailBadges(r.p);
-      return '<tr>' +
-        '<td><strong>' + esc(r.p.name) + '</strong></td>' +
-        '<td>' + (badges || '<span style="color:var(--fg3);font-size:.78rem">—</span>') + '</td>' +
-        '<td>' + catBadge(r.p.category_id) + '</td>' +
-        '<td class="tbl-num">' + (r.o || '—') + '</td>' +
-        '<td class="tbl-num" style="color:var(--accent);font-weight:600">' + (r.a || '—') + '</td>' +
-        '<td class="tbl-num">' + (r.c || '—') + '</td>' +
-        '<td class="tbl-num" style="font-weight:700;color:' + (r.s>0?'var(--ok)':r.s<0?'var(--err)':'var(--fg3)') + '">' + (r.s || '—') + '</td>' +
-        '<td class="tbl-num">' + (r.pay ? fmtMoney(r.pay) : '—') + '</td>' +
-        '</tr>';
-    }).join('') +
-    '<tr style="background:var(--surface2);font-weight:700">' +
-    '<td colspan="3">סה"כ</td>' +
-    '<td class="tbl-num">' + tO + '</td>' +
-    '<td class="tbl-num" style="color:var(--accent)">' + tA + '</td>' +
-    '<td class="tbl-num">' + tC + '</td>' +
-    '<td class="tbl-num" style="color:var(--ok)">' + tS + '</td>' +
-    '<td class="tbl-num">' + fmtMoney(tP) + '</td>' +
-    '</tr>' +
-    '</tbody></table></div></div>';
+  // שמור נתוני מיון/סינון גלובלי לטבלת הדוח
+  window._rpRows = rows;
+  window._rpSortCol = window._rpSortCol || 'name';
+  window._rpSortDir = window._rpSortDir || 1;
+  renderRpTable();
 
   // שמור נתונים לייצוא
   window._rpExportData = { rows, tO, tA, tC, tS, tP, from, to };
@@ -1559,6 +1664,124 @@ function renderReport() {
   // הצג/הסתר לפי view
   document.getElementById('rp-table').style.display = _rpView === 'table' ? '' : 'none';
   document.getElementById('rp-movements').style.display = _rpView === 'movements' ? '' : 'none';
+}
+
+// --- מיון/סינון טבלת הדוח ---
+let _rpFilterVals = {};
+
+function rpSortBy(col) {
+  if (window._rpSortCol === col) window._rpSortDir = -window._rpSortDir;
+  else { window._rpSortCol = col; window._rpSortDir = 1; }
+  renderRpTable();
+}
+
+function rpFilterChange() {
+  const inputs = document.querySelectorAll('#rp-table .col-filter');
+  _rpFilterVals = {};
+  inputs.forEach(inp => {
+    if (inp.value.trim()) _rpFilterVals[inp.dataset.col] = inp.value.trim().toLowerCase();
+  });
+  renderRpTable();
+}
+
+function renderRpTable() {
+  const rows = window._rpRows;
+  if (!rows) return;
+  const sortCol = window._rpSortCol || 'name';
+  const sortDir = window._rpSortDir || 1;
+  const filters = _rpFilterVals || {};
+
+  // סינון
+  let filtered = rows.filter(r => {
+    if (filters.name && !r.p.name.toLowerCase().includes(filters.name)) return false;
+    if (filters.details) {
+      const dStr = r.p.details ? Object.values(r.p.details).join(' ').toLowerCase() : '';
+      const catStr = (getCat(r.p.category_id)?.name || '').toLowerCase();
+      if (!dStr.includes(filters.details) && !catStr.includes(filters.details)) return false;
+    }
+    if (filters.o && !String(r.o).includes(filters.o)) return false;
+    if (filters.a && !String(r.a).includes(filters.a)) return false;
+    if (filters.c && !String(r.c).includes(filters.c)) return false;
+    if (filters.s && !String(r.s).includes(filters.s)) return false;
+    return true;
+  });
+
+  // מיון
+  filtered = filtered.slice().sort((a, b) => {
+    let va, vb;
+    if (sortCol === 'name') { va = a.p.name; vb = b.p.name; return sortDir * va.localeCompare(vb, 'he'); }
+    if (sortCol === 'o') { va = a.o; vb = b.o; }
+    else if (sortCol === 'a') { va = a.a; vb = b.a; }
+    else if (sortCol === 'c') { va = a.c; vb = b.c; }
+    else if (sortCol === 's') { va = a.s; vb = b.s; }
+    else if (sortCol === 'pay') { va = a.pay; vb = b.pay; }
+    else { va = a.p.name; vb = b.p.name; return sortDir * va.localeCompare(vb, 'he'); }
+    return sortDir * (va - vb);
+  });
+
+  const thStyle = 'cursor:pointer;user-select:none;white-space:nowrap';
+  const arrow = col => sortCol === col ? (sortDir > 0 ? ' ▲' : ' ▼') : ' ⇅';
+  const fv = col => filters[col] || '';
+
+  const filterRow = '<tr class="filter-row">' +
+    '<td><input class="col-filter" data-col="name" placeholder="חיפוש..." value="' + esc(fv('name')) + '" oninput="rpFilterChange()" style="width:100%;font-size:.75rem;padding:2px 4px;border:1px solid var(--border);border-radius:3px;background:var(--surface1);color:var(--fg1)"></td>' +
+    '<td><input class="col-filter" data-col="details" placeholder="פרטים/קטגוריה..." value="' + esc(fv('details')) + '" oninput="rpFilterChange()" style="width:100%;font-size:.75rem;padding:2px 4px;border:1px solid var(--border);border-radius:3px;background:var(--surface1);color:var(--fg1)"></td>' +
+    '<td><input class="col-filter" data-col="o" placeholder="#" value="' + esc(fv('o')) + '" oninput="rpFilterChange()" style="width:52px;font-size:.75rem;padding:2px 4px;border:1px solid var(--border);border-radius:3px;background:var(--surface1);color:var(--fg1);text-align:center"></td>' +
+    '<td><input class="col-filter" data-col="a" placeholder="#" value="' + esc(fv('a')) + '" oninput="rpFilterChange()" style="width:52px;font-size:.75rem;padding:2px 4px;border:1px solid var(--border);border-radius:3px;background:var(--surface1);color:var(--fg1);text-align:center"></td>' +
+    '<td><input class="col-filter" data-col="c" placeholder="#" value="' + esc(fv('c')) + '" oninput="rpFilterChange()" style="width:52px;font-size:.75rem;padding:2px 4px;border:1px solid var(--border);border-radius:3px;background:var(--surface1);color:var(--fg1);text-align:center"></td>' +
+    '<td><input class="col-filter" data-col="s" placeholder="#" value="' + esc(fv('s')) + '" oninput="rpFilterChange()" style="width:52px;font-size:.75rem;padding:2px 4px;border:1px solid var(--border);border-radius:3px;background:var(--surface1);color:var(--fg1);text-align:center"></td>' +
+    '<td></td>' +
+    '</tr>';
+
+  let tO2=0, tA2=0, tC2=0, tS2=0, tP2=0;
+  filtered.forEach(r => { tO2+=r.o; tA2+=r.a; tC2+=r.c; tS2+=r.s; tP2+=r.pay; });
+
+  document.getElementById('rp-table').innerHTML = '<div class="card"><div class="tbl-wrap"><table>' +
+    '<thead>' +
+    '<tr>' +
+    '<th style="' + thStyle + '" onclick="rpSortBy(\'name\')">מוצר ופרטים' + arrow('name') + '</th>' +
+    '<th style="' + thStyle + '" onclick="rpSortBy(\'name\')">קטגוריה / תת-קטגוריה</th>' +
+    '<th style="text-align:center;' + thStyle + '" onclick="rpSortBy(\'o\')">פתיחה' + arrow('o') + '<div style="font-size:.68rem;font-weight:400;color:var(--fg3)">לפני הטווח</div></th>' +
+    '<th style="text-align:center;color:var(--accent);' + thStyle + '" onclick="rpSortBy(\'a\')">קניות' + arrow('a') + '<div style="font-size:.68rem;font-weight:400;color:var(--fg3)">בטווח</div></th>' +
+    '<th style="text-align:center;' + thStyle + '" onclick="rpSortBy(\'c\')">סגירה' + arrow('c') + '<div style="font-size:.68rem;font-weight:400;color:var(--fg3)">בטווח</div></th>' +
+    '<th style="text-align:center;color:var(--ok);' + thStyle + '" onclick="rpSortBy(\'s\')">נמכר' + arrow('s') + '</th>' +
+    '<th style="text-align:left;' + thStyle + '" onclick="rpSortBy(\'pay\')">הכנסה' + arrow('pay') + '</th>' +
+    '</tr>' +
+    filterRow +
+    '</thead><tbody>' +
+    filtered.map(r => {
+      const badges = detailBadges(r.p);
+      const cat = getCat(r.p.category_id);
+      const sub = getSubcat(r.p.subcategory_id);
+      // תאריכי פתיחה/סגירה
+      const oDate = r.info.opening.date ? '<div style="font-size:.7rem;color:var(--fg3)">' + fmtDate(r.info.opening.date) + (r.info.opening.dateHeb ? ' <span title="' + r.info.opening.dateHeb + '">📅</span>' : '') + '</div>' : '';
+      const cDate = r.info.closing.date ? '<div style="font-size:.7rem;color:var(--fg3)">' + fmtDate(r.info.closing.date) + (r.info.closing.dateHeb ? ' <span title="' + r.info.closing.dateHeb + '">📅</span>' : '') + (r.info.closing.hasMiddle ? ' <span title="היו עוד ' + r.info.closing.middleCount + ' ספירות ביניים שלא נלקחו בחשבון" style="color:var(--warn);cursor:help">ℹ</span>' : '') + '</div>' : '';
+      // אספקות
+      const aDates = r.info.supply.dates.length ? '<div style="font-size:.7rem;color:var(--fg3)">' + r.info.supply.dates.map(fmtDate).join(', ') + '</div>' : '';
+      // נמכר עם אדום ומידע אם שלילי
+      const soldStyle = r.s < 0 ? 'color:var(--err);font-weight:700' : r.s > 0 ? 'color:var(--ok);font-weight:700' : 'color:var(--fg3)';
+      const soldCell = r.s < 0
+        ? '<span style="' + soldStyle + '" title="מספר שלילי — ייתכן שהמלאי לא נספר נכון, או שהיתה אספקה שלא תועדה. בדוק את הנתונים.">' + r.s + ' ⚠️</span>'
+        : '<span style="' + soldStyle + '">' + (r.s || '—') + '</span>';
+      return '<tr>' +
+        '<td><strong>' + esc(r.p.name) + '</strong>' + (badges ? '<div style="margin-top:3px">' + badges + '</div>' : '') + '</td>' +
+        '<td>' + (cat ? '<span style="font-size:.78rem;font-weight:600;color:var(--fg2)">' + esc(cat.name) + '</span>' : '') + (sub ? '<div style="font-size:.73rem;color:var(--fg3)">' + esc(sub.name) + '</div>' : '') + '</td>' +
+        '<td class="tbl-num">' + (r.o || '—') + oDate + '</td>' +
+        '<td class="tbl-num" style="color:var(--accent);font-weight:600">' + (r.a || '—') + aDates + '</td>' +
+        '<td class="tbl-num">' + (r.c || '—') + cDate + '</td>' +
+        '<td class="tbl-num">' + soldCell + '</td>' +
+        '<td class="tbl-num">' + (r.pay ? fmtMoney(r.pay) : '—') + '</td>' +
+        '</tr>';
+    }).join('') +
+    '<tr style="background:var(--surface2);font-weight:700">' +
+    '<td colspan="2">סה"כ (' + filtered.length + ' מוצרים)</td>' +
+    '<td class="tbl-num">' + tO2 + '</td>' +
+    '<td class="tbl-num" style="color:var(--accent)">' + tA2 + '</td>' +
+    '<td class="tbl-num">' + tC2 + '</td>' +
+    '<td class="tbl-num" style="color:' + (tS2<0?'var(--err)':'var(--ok)') + '">' + tS2 + '</td>' +
+    '<td class="tbl-num">' + fmtMoney(tP2) + '</td>' +
+    '</tr>' +
+    '</tbody></table></div></div>';
 }
 
 function renderRpMovements(from, to, catF, subcatF) {
@@ -2568,13 +2791,8 @@ function generateInsights() {
 }
 
 function calcSold(productId, from, to) {
-  // opening + supply - closing
-  const openingC = counts.filter(c => c.product_id===productId && c.date<from).sort((a,b)=>b.date.localeCompare(a.date))[0];
-  const closing = counts.filter(c => c.product_id===productId && c.date>=from && c.date<=to).sort((a,b)=>b.date.localeCompare(a.date))[0];
-  if (!closing) return 0;
-  const opening = openingC ? (openingC.count||openingC.quantity||0) : 0;
-  const supplyQty = supply.filter(s => s.product_id===productId && s.date>=from && s.date<=to).reduce((sum,s)=>sum+(s.qty||s.quantity||0),0);
-  return Math.max(0, opening + supplyQty - (closing.count||closing.quantity||0));
+  const info = soldInRange(productId, from, to);
+  return info.sold;
 }
 
 // בדיקת טוקן הזמנה בטעינת הדף
