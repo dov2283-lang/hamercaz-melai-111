@@ -644,9 +644,12 @@ tr:hover td { background: var(--surface2); }
 
     <!-- שלב 2: מיפוי עמודות -->
     <div id="import-step-2" style="display:none">
-      <div style="font-weight:600;margin-bottom:10px;font-size:.9rem">🗂️ מיפוי עמודות</div>
-      <div style="font-size:.8rem;color:var(--fg3);margin-bottom:10px">המערכת זיהתה את העמודות הבאות — בדוק שכל אחת ממופה לשדה הנכון:</div>
-      <div id="import-mapping-grid" style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px 12px;align-items:center;margin-bottom:14px"></div>
+      <div style="font-weight:700;margin-bottom:4px;font-size:.95rem">🗂️ מיפוי עמודות</div>
+      <div style="font-size:.82rem;color:var(--fg2);margin-bottom:12px;padding:8px 10px;background:var(--accent-lt);border-radius:7px;border-right:3px solid var(--accent)">
+        המערכת זיהתה אוטומטית את העמודות — בדוק שכל כרטיסייה ממופה נכון.<br>
+        <span style="color:var(--fg3);font-size:.77rem">לחץ על הרשימה בצד ימין של כל כרטיסייה כדי לשנות את התפקיד.</span>
+      </div>
+      <div id="import-mapping-grid" style="display:block;margin-bottom:14px"></div>
       <div id="import-map-err" style="color:var(--err);font-size:.83rem;margin-bottom:8px;display:none"></div>
       <div style="display:flex;gap:8px">
         <button class="btn-sm" onclick="importGoStep(1)">← חזור</button>
@@ -3540,67 +3543,113 @@ function importBuildMappingUI() {
   ).concat(['detail','ignore']);
 
   const roleLabels = {
-    date:'תאריך', product:'מוצר', qty:'כמות', price:'מחיר',
-    supplier:'ספק', notes:'הערות', count:'כמות ספירה',
-    detail:'פרט מוצר (details)', ignore:'— התעלם —'
+    date:'📅 תאריך', product:'📦 מוצר', qty:'🔢 כמות', price:'💰 מחיר',
+    supplier:'🏭 ספק', notes:'📝 הערות', count:'🔢 כמות ספירה',
+    detail:'🏷️ פרט מוצר', ignore:'✖ התעלם'
   };
 
-  grid.innerHTML =
-    '<div style="font-size:.77rem;font-weight:700;color:var(--fg3)">עמודה בקובץ</div>' +
-    '<div style="font-size:.77rem;color:var(--fg3)">דוגמה מהנתונים</div>' +
-    '<div style="font-size:.77rem;font-weight:700;color:var(--fg3)">תפקיד במערכת</div>' +
-    '<div style="font-size:.77rem;color:var(--fg3)">שם פרט (אם detail)</div>';
+  // צבע רקע לכל תפקיד
+  const roleBg = {
+    date:'#eef9ff', product:'#f0fff4', qty:'#f5f0ff', count:'#f5f0ff',
+    price:'#fffbf0', supplier:'#f0f4ff', notes:'#fafafa',
+    detail:'#fff8e6', ignore:'#f5f5f5'
+  };
+  const roleBgDark = {
+    date:'#0d2233', product:'#0d2318', qty:'#1a1240', count:'#1a1240',
+    price:'#2d2000', supplier:'#121a40', notes:'#1a1a1a',
+    detail:'#2d2000', ignore:'#1a1a1a'
+  };
 
+  // קבץ לפי סוג: זוהה / פרט מוצר / התעלם
+  const identified = _importHeaders.filter(h => _importMapping[h]?.role && _importMapping[h].role !== 'ignore' && _importMapping[h].role !== 'detail');
+  const details    = _importHeaders.filter(h => _importMapping[h]?.role === 'detail');
+  const ignored    = _importHeaders.filter(h => !_importMapping[h] || _importMapping[h].role === 'ignore');
+
+  let html = '';
+
+  function buildSection(title, cols, accent) {
+    if (!cols.length) return '';
+    let s = `<div style="grid-column:1/-1;margin:10px 0 4px;font-size:.78rem;font-weight:700;color:${accent};display:flex;align-items:center;gap:6px">
+      <span style="flex:1;border-top:1px solid ${accent}22"></span>${title}<span style="flex:1;border-top:1px solid ${accent}22"></span></div>`;
+    cols.forEach(col => {
+      const info = _importMapping[col] || { role:'ignore' };
+      const sample = _importRawRows.slice(0,3).map(r=>String(r[col]||'').trim()).filter(Boolean).join(' · ');
+      const safeId = col.replace(/[^a-z0-9]/gi,'_');
+
+      const roleOpts = roleOptions.map(r =>
+        `<option value="${r}" ${info.role===r?'selected':''}>${roleLabels[r]||r}</option>`
+      ).join('');
+
+      const detailKeyOpts = detailNames.map(d =>
+        `<option value="${d}" ${info.detailKey===d?'selected':''}>${esc(d)}</option>`
+      ).join('');
+
+      const detailSel = `<select class="imp-detail-key" data-col="${esc(col)}" style="font-size:.8rem;min-width:100px">
+        <option value="${esc(col)}" ${!detailNames.includes(info.detailKey)?'selected':''}>${esc(info.detailKey||col)}</option>
+        ${detailKeyOpts}</select>`;
+
+      s += `<div class="imp-card" id="imp-card-${safeId}" style="
+          grid-column:1/-1;display:grid;grid-template-columns:1fr auto;gap:0;
+          border:1.5px solid var(--border);border-radius:9px;overflow:hidden;
+          margin-bottom:6px;background:var(--surface)">
+        <div style="padding:10px 12px;display:flex;flex-direction:column;gap:4px;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-weight:700;font-size:.88rem">${esc(col)}</span>
+            <span style="font-size:.74rem;color:var(--fg3);background:var(--surface2);padding:1px 7px;border-radius:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px" title="${esc(sample)}">${esc(sample.slice(0,50)||'—')}</span>
+          </div>
+          <div class="imp-detail-extra-${safeId}" style="${info.role==='detail'?'':'display:none'}">
+            <span style="font-size:.76rem;color:var(--fg3)">שם הפרט: </span>${detailSel}
+          </div>
+        </div>
+        <div style="border-right:1.5px solid var(--border);display:flex;align-items:center;padding:0 10px;min-width:150px">
+          <select class="imp-role-sel" data-col="${esc(col)}" data-safeid="${safeId}"
+            style="font-size:.85rem;font-weight:600;border:none;background:transparent;width:100%;text-align:center;cursor:pointer;padding:6px 2px"
+            onchange="importRoleChange(this)">${roleOpts}</select>
+        </div>
+      </div>`;
+    });
+    return s;
+  }
+
+  html += buildSection('✅ שדות שזוהו אוטומטית', identified, 'var(--ok)');
+  html += buildSection('🏷️ פרטי מוצר', details, 'var(--warn)');
+  html += buildSection('⬜ לא זוהה — בחר ידנית', ignored, 'var(--fg3)');
+
+  if (!html.trim()) html = '<div style="grid-column:1/-1;color:var(--fg3);font-size:.85rem;text-align:center;padding:20px">לא נמצאו עמודות לעיבוד</div>';
+  grid.innerHTML = html;
+
+  // צביעת כרטיסיות לפי תפקיד
   _importHeaders.forEach(col => {
     const info = _importMapping[col] || { role:'ignore' };
-    const sample = _importRawRows.slice(0,3).map(r=>String(r[col]||'').trim()).filter(Boolean).join(' / ');
-    const isDetected = info.role !== 'ignore';
-
-    const roleOpts = roleOptions.map(r =>
-      `<option value="${r}" ${info.role===r?'selected':''}>${roleLabels[r]||r}</option>`
-    ).join('');
-
-    // שם פרט — select מה-detail_types הידועים + אפשרות חופשית
-    const detailKeyOpts = detailNames.map(d =>
-      `<option value="${d}" ${info.detailKey===d?'selected':''}>${esc(d)}</option>`
-    ).join('');
-    const detailKeyInput = info.role==='detail'
-      ? `<select class="imp-detail-key" data-col="${esc(col)}" style="font-size:.8rem">` +
-        `<option value="${esc(col)}" ${!detailNames.includes(info.detailKey)?'selected':''}>${esc(info.detailKey||col)}</option>` +
-        detailKeyOpts + '</select>'
-      : `<span style="color:var(--fg3);font-size:.78rem">—</span>`;
-
-    const badge = isDetected
-      ? `<span style="color:var(--ok);font-size:.73rem">✓</span>`
-      : `<span style="color:var(--fg3);font-size:.73rem">?</span>`;
-
-    grid.insertAdjacentHTML('beforeend',
-      `<div style="display:flex;align-items:center;gap:5px;padding:4px 6px;background:var(--surface2);border-radius:4px;font-size:.82rem;font-weight:600">${badge} ${esc(col)}</div>` +
-      `<div style="font-size:.76rem;color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(sample)}">${esc(sample.slice(0,40))}</div>` +
-      `<select class="imp-role-sel" data-col="${esc(col)}" style="font-size:.8rem" onchange="importRoleChange(this)">${roleOpts}</select>` +
-      `<div class="imp-detail-wrap-${esc(col).replace(/[^a-z0-9]/gi,'_')}">${detailKeyInput}</div>`
-    );
+    _importColorCard(col.replace(/[^a-z0-9]/gi,'_'), info.role);
   });
+}
+
+function _importColorCard(safeId, role) {
+  const card = document.getElementById('imp-card-' + safeId);
+  if (!card) return;
+  const colors = {
+    date:'var(--accent-lt)', product:'var(--ok-lt)', qty:'#f3f0ff',
+    count:'#f3f0ff', price:'var(--warn-lt)', supplier:'#f0f4ff',
+    notes:'var(--surface2)', detail:'var(--warn-lt)', ignore:'var(--surface2)'
+  };
+  card.style.borderColor = role === 'ignore' ? 'var(--border)' :
+    role === 'date' ? 'var(--accent)' :
+    role === 'product' ? 'var(--ok)' :
+    role === 'detail' ? 'var(--warn)' : 'var(--border)';
+  card.style.background = colors[role] || 'var(--surface)';
 }
 
 function importRoleChange(sel) {
   const col = sel.getAttribute('data-col');
+  const safeId = sel.getAttribute('data-safeid');
   const role = sel.value;
   if (_importMapping[col]) _importMapping[col].role = role;
   else _importMapping[col] = { role };
+  _importColorCard(safeId, role);
   // הצג/הסתר שדה שם פרט
-  const wrapClass = 'imp-detail-wrap-' + col.replace(/[^a-z0-9]/gi,'_');
-  const wrap = document.querySelector('.' + wrapClass);
-  if (wrap) {
-    if (role === 'detail') {
-      const detailNames = _importGetDetailNames();
-      const colKey = _importMapping[col]?.detailKey || col;
-      const opts = detailNames.map(d=>`<option value="${d}" ${d===colKey?'selected':''}>${esc(d)}</option>`).join('');
-      wrap.innerHTML = `<select class="imp-detail-key" data-col="${esc(col)}" style="font-size:.8rem"><option value="${esc(col)}">${esc(col)}</option>${opts}</select>`;
-    } else {
-      wrap.innerHTML = '<span style="color:var(--fg3);font-size:.78rem">—</span>';
-    }
-  }
+  const extra = document.querySelector('.imp-detail-extra-' + safeId);
+  if (extra) extra.style.display = role === 'detail' ? '' : 'none';
 }
 
 // ── אחרי מיפוי → תצוגה מקדימה ──
