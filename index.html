@@ -2617,6 +2617,7 @@ async function renderAdmin() {
       return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">' +
         '<div style="flex:1"><div style="font-weight:600;font-size:.88rem">' + esc(inv.full_name) + '</div>' +
         '<div style="font-size:.78rem;color:var(--fg3)">' + esc(inv.email) + ' · ' + typeLabel + '</div></div>' +
+        '<button class="btn-sm" onclick="openEditInvitePermModal(\'' + inv.id + '\')">הרשאות</button>' +
         '<button class="btn-sm" onclick="copyText(\'' + link + '\')">העתק קישור</button>' +
         '<button class="btn-sm btn-danger" onclick="cancelInvite(\'' + inv.id + '\')">בטל</button>' +
         '</div>';
@@ -2719,8 +2720,34 @@ function openEditPermModal(userId) {
   document.getElementById('modal-invite').classList.add('open');
 }
 
+function openEditInvitePermModal(inviteId) {
+  _inviteMode = 'edit-invite';
+  document.getElementById('invite-modal-title').textContent = 'עריכת הרשאות הזמנה';
+  document.getElementById('invite-user-id').value = inviteId;
+  document.getElementById('invite-err').textContent = '';
+  document.getElementById('invite-link-box').style.display = 'none';
+  document.getElementById('invite-submit-btn').textContent = 'שמור הרשאות';
+  document.getElementById('invite-submit-btn').style.display = '';
+  document.getElementById('invite-type-section').style.display = 'none';
+  sb('user_invites?id=eq.' + inviteId + '&select=*').then(rows => {
+    const inv = rows?.[0];
+    if (!inv) return;
+    document.getElementById('invite-email').value = inv.email;
+    document.getElementById('invite-email').disabled = true;
+    document.getElementById('invite-name').value = inv.full_name || '';
+    const isView = inv.can_edit === false;
+    document.getElementById(isView ? 'invite-access-view' : 'invite-access-edit').checked = true;
+    document.getElementById('invite-struct-section').style.display = isView ? 'none' : '';
+    if (inv.can_add_categories) document.getElementById('invite-struct-all').checked = true;
+    else if (inv.can_add_subcategories) document.getElementById('invite-struct-subcat').checked = true;
+    else document.getElementById('invite-struct-none').checked = true;
+    _buildCatsGrid(inv.allowed_categories);
+  });
+  document.getElementById('modal-invite').classList.add('open');
+}
+
 async function saveUserPerms() {
-  const userId = document.getElementById('invite-user-id').value;
+  const id = document.getElementById('invite-user-id').value;
   const name = document.getElementById('invite-name').value.trim();
   const accessVal = getRadioValue('invite-access');
   const canEdit = accessVal !== 'view';
@@ -2733,11 +2760,19 @@ async function saveUserPerms() {
     allowedCats = [...document.querySelectorAll('#invite-cats-grid input[type=checkbox]:checked')].map(el => el.getAttribute('data-cat-id'));
   }
   try {
-    await sb('users?id=eq.' + userId, {
-      method: 'PATCH',
-      body: { full_name: name, can_edit: canEdit, can_add_categories: canAddCategories, can_add_subcategories: canAddSubcategories, allowed_categories: allowedCats },
-      prefer: 'return=minimal'
-    });
+    if (_inviteMode === 'edit-invite') {
+      await sb('user_invites?id=eq.' + id, {
+        method: 'PATCH',
+        body: { full_name: name, can_edit: canEdit, can_add_categories: canAddCategories, can_add_subcategories: canAddSubcategories, allowed_categories: allowedCats },
+        prefer: 'return=minimal'
+      });
+    } else {
+      await sb('users?id=eq.' + id, {
+        method: 'PATCH',
+        body: { full_name: name, can_edit: canEdit, can_add_categories: canAddCategories, can_add_subcategories: canAddSubcategories, allowed_categories: allowedCats },
+        prefer: 'return=minimal'
+      });
+    }
     closeModal('modal-invite');
     renderAdmin();
   } catch(e) {
