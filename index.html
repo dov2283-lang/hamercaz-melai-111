@@ -2650,7 +2650,7 @@ function getRadioValue(name) {
 
 let _inviteMode = 'create'; // 'create' | 'edit'
 function inviteSubmitAction() {
-  if (_inviteMode === 'edit') saveUserPerms();
+  if (_inviteMode === 'edit' || _inviteMode === 'edit-invite') saveUserPerms();
   else createInvite();
 }
 
