@@ -915,6 +915,8 @@ function isOwner() { return currentDbUser?.role === 'owner'; }
 function userCanEdit() { return isOwner() || currentDbUser?.can_edit !== false; }
 function userCanAddCategories() { return isOwner() || currentDbUser?.can_add_categories === true; }
 function userCanAddSubcategories() { return isOwner() || currentDbUser?.can_add_categories === true || currentDbUser?.can_add_subcategories === true; }
+// Returns the main organization owner_id — for sub-users this is their owner's id, for owners it's their own uid
+function orgOwnerId() { return currentDbUser?.owner_id || uid(); }
 
 // ══════════════════════════════════════════
 //  AUTH
@@ -1518,7 +1520,7 @@ async function saveProduct() {
   });
 
   const data = {
-    name, owner_id: uid(),
+    name, owner_id: orgOwnerId(),
     barcode: document.getElementById('prod-barcode').value.trim() || null,
     category_id: document.getElementById('prod-cat').value || null,
     subcategory_id: document.getElementById('prod-subcat').value || null,
@@ -1769,7 +1771,7 @@ async function saveSupply() {
     if (val !== '') supDetails[key] = el.type === 'number' ? (parseFloat(val) || val) : val;
   });
   const data = {
-    owner_id: uid(),
+    owner_id: orgOwnerId(),
     date: document.getElementById('sup-date').value,
     product_id: document.getElementById('sup-product').value || null,
     qty: parseFloat(document.getElementById('sup-qty').value) || 0,
@@ -1948,7 +1950,7 @@ async function saveCount() {
     if (val !== '') cntDetails[key] = el.type === 'number' ? (parseFloat(val) || val) : val;
   });
   const data = {
-    owner_id: uid(),
+    owner_id: orgOwnerId(),
     date: document.getElementById('cnt-date').value,
     product_id: document.getElementById('cnt-product').value || null,
     count: parseFloat(document.getElementById('cnt-count').value) || 0,
@@ -2410,7 +2412,7 @@ async function saveCat() {
   const id = document.getElementById('cat-id').value;
   const name = document.getElementById('cat-name').value.trim();
   if (!name) { alert('נא להזין שם'); return; }
-  const data = { name, owner_id: uid() };
+  const data = { name, owner_id: orgOwnerId() };
   try {
     if (id) {
       await sb('categories?id=eq.' + id, { method: 'PATCH', body: data, prefer: 'return=minimal' });
@@ -2578,7 +2580,7 @@ async function saveSubcat() {
   const detailTypes = window._subcatDetailTypes || [];
   const data = {
     name,
-    owner_id: uid(),
+    owner_id: orgOwnerId(),
     category_id: document.getElementById('subcat-cat-id').value,
     detail_types: detailTypes.length ? detailTypes : null
   };
@@ -2631,7 +2633,7 @@ async function saveVendor() {
   const name = document.getElementById('vendor-name').value.trim();
   if (!name) { alert('נא להזין שם ספק'); return; }
   const data = {
-    name, owner_id: uid(),
+    name, owner_id: orgOwnerId(),
     contact: document.getElementById('vendor-contact').value.trim() || null,
     phone: document.getElementById('vendor-phone').value.trim() || null,
     email: document.getElementById('vendor-email').value.trim() || null,
@@ -3867,14 +3869,14 @@ async function importConfirm() {
     try {
       const details = Object.keys(row._details||{}).length ? row._details : undefined;
       if (_importMode==='supply') {
-        const data = { owner_id:uid(), date:row.date, product_id:row._product_id,
+        const data = { owner_id:orgOwnerId(), date:row.date, product_id:row._product_id,
           qty:parseFloat(row.qty)||0, price:parseFloat(row.price)||0,
           supplier_id:row._supplier_id||null, notes:row.notes||null,
           ...(details?{details}:{}) };
         const res = await sb('supply',{method:'POST',body:data});
         supply.unshift(res[0]);
       } else {
-        const data = { owner_id:uid(), date:row.date, product_id:row._product_id,
+        const data = { owner_id:orgOwnerId(), date:row.date, product_id:row._product_id,
           count:parseFloat(row.count)||0, notes:row.notes||null,
           ...(details?{details}:{}) };
         const res = await sb('counts',{method:'POST',body:data});
