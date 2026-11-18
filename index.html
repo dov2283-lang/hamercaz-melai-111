@@ -2882,7 +2882,8 @@ async function saveUserPerms() {
   const allCats = document.getElementById('invite-all-cats').checked;
   let allowedCats = null;
   if (!allCats) {
-    allowedCats = [...document.querySelectorAll('#invite-cats-grid input[type=checkbox]:checked')].map(el => el.getAttribute('data-cat-id'));
+    const checked = [...document.querySelectorAll('#invite-cats-grid input[type=checkbox]:checked')].map(el => el.getAttribute('data-cat-id'));
+    allowedCats = checked.length > 0 ? checked : null; // null = all categories
   }
   try {
     if (_inviteMode === 'edit-invite') {
