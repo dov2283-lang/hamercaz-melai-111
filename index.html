@@ -278,7 +278,7 @@ tr:hover td { background: var(--surface2); }
     <div class="tab" onclick="showTab('supply')">אספקות</div>
     <div class="tab" onclick="showTab('counts')">ספירות</div>
     <div class="tab" onclick="showTab('reports')">דוחות</div>
-    <div class="tab" onclick="showTab('categories')">קטגוריות</div>
+    <div class="tab" id="tab-categories-btn" onclick="showTab('categories')">קטגוריות</div>
     <div class="tab" onclick="showTab('suppliers')">ספקים</div>
     <div class="tab" id="tab-admin-btn" onclick="showTab('admin')" style="display:none">ניהול משתמשים</div>
   </div>
@@ -917,6 +917,22 @@ function userCanAddCategories() { return isOwner() || currentDbUser?.can_add_cat
 function userCanAddSubcategories() { return isOwner() || currentDbUser?.can_add_categories === true || currentDbUser?.can_add_subcategories === true; }
 // Returns the main organization owner_id — for sub-users this is their owner's id, for owners it's their own uid
 function orgOwnerId() { return currentDbUser?.owner_id || uid(); }
+// Can user edit/delete a specific category (owner always yes; sub-user only if it's in their allowed list AND has cat permission)
+function userCanEditCat(catId) {
+  if (isOwner()) return true;
+  if (!currentDbUser?.can_add_categories) return false;
+  const allowed = currentDbUser?.allowed_categories;
+  if (!allowed || !Array.isArray(allowed) || allowed.length === 0) return true; // גישה לכל הקטגוריות
+  return allowed.includes(catId);
+}
+// Can user add/edit/delete a subcat in a specific category
+function userCanEditSubcat(catId) {
+  if (isOwner()) return true;
+  if (!userCanAddSubcategories()) return false;
+  const allowed = currentDbUser?.allowed_categories;
+  if (!allowed || !Array.isArray(allowed) || allowed.length === 0) return true;
+  return allowed.includes(catId);
+}
 
 // ══════════════════════════════════════════
 //  AUTH
@@ -947,6 +963,9 @@ async function onSignIn() {
   if (currentDbUser?.role === 'owner') {
     document.getElementById('tab-admin-btn').style.display = '';
   }
+  // Show categories tab only for users with structure permissions (or owner)
+  const hasCatPerm = isOwner() || currentDbUser?.can_add_categories === true || currentDbUser?.can_add_subcategories === true;
+  document.getElementById('tab-categories-btn').style.display = hasCatPerm ? '' : 'none';
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   await loadAll();
@@ -1013,7 +1032,11 @@ async function loadAll() {
   if (allowedCats && Array.isArray(allowedCats) && allowedCats.length > 0 && !isOwner()) {
     categories = categories.filter(c => allowedCats.includes(c.id));
     subcategories = subcategories.filter(s => allowedCats.includes(s.category_id));
+    // build set of allowed product ids for filtering supply/counts
+    const allowedProductIds = new Set(products.filter(p => allowedCats.includes(p.category_id)).map(p => p.id));
     products = products.filter(p => allowedCats.includes(p.category_id));
+    supply = supply.filter(s => allowedProductIds.has(s.product_id));
+    counts = counts.filter(c => allowedProductIds.has(c.product_id));
   }
 }
 
@@ -2373,14 +2396,14 @@ function renderCategories() {
   categories.forEach(cat => {
     const subs = subcategories.filter(s => s.category_id === cat.id);
     const catProds = products.filter(p => p.category_id === cat.id);
-    const canAddSub = userCanAddSubcategories();
-    const canEdit = isOwner();
+    const canAddSub = userCanEditSubcat(cat.id);
+    const canEditCat = userCanEditCat(cat.id);
     html += '<div class="card" style="margin-bottom:12px"><div class="card-hd">' +
       '<span>' + esc(cat.name) + ' <span style="font-weight:400;color:var(--fg3);font-size:.8rem">(' + catProds.length + ' מוצרים)</span></span>' +
       '<div style="display:flex;gap:6px">' +
       (canAddSub ? '<button class="btn-sm" onclick="openSubcatModal(\'' + cat.id + '\')">+ תת-קטגוריה</button>' : '') +
-      (canEdit ? '<button class="btn-sm" onclick="editCat(\'' + cat.id + '\')">עריכה</button>' : '') +
-      (canEdit ? '<button class="btn-sm btn-danger" onclick="deleteCat(\'' + cat.id + '\')">מחק</button>' : '') +
+      (canEditCat ? '<button class="btn-sm" onclick="editCat(\'' + cat.id + '\')">עריכה</button>' : '') +
+      (canEditCat ? '<button class="btn-sm btn-danger" onclick="deleteCat(\'' + cat.id + '\')">מחק</button>' : '') +
       '</div></div>';
     if (subs.length) {
       html += '<div class="card-body" style="padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px">';
@@ -2393,8 +2416,8 @@ function renderCategories() {
         })();
         html += '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);padding:4px 10px;border-radius:20px;font-size:.82rem">' +
           '<span>' + esc(s.name) + (dts.length ? ' <span style="color:var(--accent);font-size:.7rem">[' + dts.map(d=>esc(d.label)).join(', ') + ']</span>' : '') + '</span>' +
-          (canEdit ? '<button onclick="editSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--fg3);font-size:.8rem">✏️</button>' : '') +
-          (canEdit ? '<button onclick="deleteSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--err);font-size:.8rem">✕</button>' : '') +
+          (canAddSub ? '<button onclick="editSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--fg3);font-size:.8rem">✏️</button>' : '') +
+          (canAddSub ? '<button onclick="deleteSubcat(\'' + s.id + '\')" style="background:none;border:none;cursor:pointer;color:var(--err);font-size:.8rem">✕</button>' : '') +
           '</span>';
       });
       html += '</div>';
