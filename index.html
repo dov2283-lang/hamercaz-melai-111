@@ -999,15 +999,22 @@ async function sendReset() {
 //  LOAD DATA
 // ══════════════════════════════════════════
 async function loadAll() {
-  const uid = currentUser.id;
+  // RLS handles org-level filtering via get_main_owner_id() — no need to filter by uid here
   [categories, subcategories, suppliers, products, supply, counts] = await Promise.all([
-    sb('categories?owner_id=eq.' + uid + '&order=order.asc,name.asc'),
-    sb('subcategories?owner_id=eq.' + uid + '&order=order.asc,name.asc'),
-    sb('suppliers?owner_id=eq.' + uid + '&order=name.asc'),
-    sb('products?owner_id=eq.' + uid + '&order=name.asc'),
-    sb('supply?owner_id=eq.' + uid + '&order=date.desc'),
-    sb('counts?owner_id=eq.' + uid + '&order=date.desc')
+    sb('categories?order=order.asc,name.asc'),
+    sb('subcategories?order=order.asc,name.asc'),
+    sb('suppliers?order=name.asc'),
+    sb('products?order=name.asc'),
+    sb('supply?order=date.desc'),
+    sb('counts?order=date.desc')
   ]);
+  // Apply allowed_categories filter for restricted users (client-side, after RLS fetch)
+  const allowedCats = currentDbUser?.allowed_categories;
+  if (allowedCats && Array.isArray(allowedCats) && allowedCats.length > 0 && !isOwner()) {
+    categories = categories.filter(c => allowedCats.includes(c.id));
+    subcategories = subcategories.filter(s => allowedCats.includes(s.category_id));
+    products = products.filter(p => allowedCats.includes(p.category_id));
+  }
 }
 
 // ══════════════════════════════════════════
