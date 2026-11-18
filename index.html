@@ -2450,7 +2450,15 @@ async function saveCat() {
       if (idx >= 0) categories[idx] = { ...categories[idx], ...data };
     } else {
       const rows = await sb('categories', { method: 'POST', body: data });
-      categories.push(rows[0]);
+      const newCat = rows[0];
+      categories.push(newCat);
+      // If sub-user created this category, add it to their allowed_categories
+      if (!isOwner() && currentDbUser) {
+        const existing = Array.isArray(currentDbUser.allowed_categories) ? currentDbUser.allowed_categories : [];
+        const updated = [...existing, newCat.id];
+        await sb('users?id=eq.' + currentUser.id, { method: 'PATCH', body: { allowed_categories: updated }, prefer: 'return=minimal' });
+        currentDbUser.allowed_categories = updated;
+      }
     }
     closeModal('modal-cat'); renderCategories();
   } catch(e) { alert('שגיאה: ' + e.message); }
