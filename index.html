@@ -2429,7 +2429,7 @@ function renderCategories() {
 
 function openCatModal(id) {
   if (!id && !userCanAddCategories()) { alert('אין לך הרשאה ליצור קטגוריות חדשות'); return; }
-  if (id && !isOwner()) { alert('רק הבעלים יכול לערוך קטגוריות קיימות'); return; }
+  if (id && !userCanEditCat(id)) { alert('אין לך הרשאה לערוך קטגוריה זו'); return; }
   const c = id ? getCat(id) : null;
   document.getElementById('cat-modal-title').textContent = c ? 'עריכת קטגוריה' : 'קטגוריה חדשה';
   document.getElementById('cat-id').value = id || '';
@@ -2591,8 +2591,9 @@ function dtDragEnd(e) {
 }
 
 function openSubcatModal(catId, id) {
-  if (!id && !userCanAddSubcategories()) { alert('אין לך הרשאה להוסיף תת-קטגוריות'); return; }
-  if (id && !isOwner()) { alert('רק הבעלים יכול לערוך תת-קטגוריות קיימות'); return; }
+  const resolvedCatId = catId || (id ? getSubcat(id)?.category_id : null);
+  if (!id && !userCanEditSubcat(resolvedCatId)) { alert('אין לך הרשאה להוסיף תת-קטגוריות'); return; }
+  if (id && !userCanEditSubcat(resolvedCatId)) { alert('אין לך הרשאה לערוך תת-קטגוריה זו'); return; }
   const s = id ? getSubcat(id) : null;
   document.getElementById('subcat-modal-title').textContent = s ? 'עריכת תת-קטגוריה' : 'תת-קטגוריה חדשה';
   document.getElementById('subcat-id').value = id || '';
